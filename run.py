@@ -134,10 +134,10 @@ if file_day:
 # ── 히스토리 저장 ──────────────────────────────────────────
 history = {}
 if os.path.exists(HISTORY_FILE):
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+    with open(HISTORY_FILE, "r", encoding="utf-8-sig") as f:
         history = json.load(f)
 history[report_date] = {"shop": shop_data, "day": day_data}
-with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+with open(HISTORY_FILE, "w", encoding="utf-8-sig") as f:
     json.dump(history, f, ensure_ascii=False, indent=2)
 
 # ── 집계 ───────────────────────────────────────────────────
@@ -451,7 +451,7 @@ function switchTab(tab){{
 """
 
 # ── index.html 저장 (항상 덮어쓰기) ───────────────────────
-with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+with open(OUTPUT_FILE, "w", encoding="utf-8-sig") as f:
     f.write(html)
 
 print(f"\n✅ 대시보드 생성 완료!")
