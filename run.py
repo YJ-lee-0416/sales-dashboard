@@ -1,10 +1,11 @@
 # ============================================================
-# 사방넷 매출 자동 가공 스크립트 v4
+# 사방넷 매출 자동 가공 스크립트 v5
 # ============================================================
 
 import pandas as pd
 import os, glob, json, re
 from datetime import datetime, timedelta
+from collections import defaultdict
 
 BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
 INPUT_DIR    = os.path.join(BASE_DIR, "input")
@@ -34,6 +35,55 @@ def extract_date_from_files(files):
             return f"{d[:4]}-{d[4:6]}-{d[6:]}"
     return datetime.today().strftime("%Y-%m-%d")
 
+def compute_trends(rows):
+    """채널별 rows에서 일별/주별/월별 추이 데이터 계산"""
+    date_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
+    for r in rows:
+        date_agg[r["일자"]]["순매출금액"]   += r["순매출금액"]
+        date_agg[r["일자"]]["정산예정금액"] += r["정산예정금액"]
+    sorted_dates = sorted(date_agg.keys())
+    if not sorted_dates:
+        return {}, {}, {}
+
+    # 일별 최근 7일
+    daily_keys = sorted_dates[-7:]
+    daily = {
+        "labels": daily_keys,
+        "net":    [date_agg[d]["순매출금액"]   for d in daily_keys],
+        "settle": [date_agg[d]["정산예정금액"] for d in daily_keys],
+    }
+
+    # 주별 최근 30일
+    week_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
+    for d in sorted_dates:
+        dt = datetime.strptime(d, "%Y-%m-%d")
+        week_start = (dt - timedelta(days=dt.weekday())).strftime("%Y-%m-%d")
+        week_agg[week_start]["순매출금액"]   += date_agg[d]["순매출금액"]
+        week_agg[week_start]["정산예정금액"] += date_agg[d]["정산예정금액"]
+    last_date = datetime.strptime(sorted_dates[-1], "%Y-%m-%d")
+    cutoff_30 = (last_date - timedelta(days=30)).strftime("%Y-%m-%d")
+    weekly_keys = sorted(k for k in week_agg if k >= cutoff_30)
+    weekly = {
+        "labels": [f"{k[5:7]}/{k[8:]}~" for k in weekly_keys],
+        "net":    [week_agg[k]["순매출금액"]   for k in weekly_keys],
+        "settle": [week_agg[k]["정산예정금액"] for k in weekly_keys],
+    }
+
+    # 월별 최근 12개월
+    month_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
+    for d in sorted_dates:
+        ym = d[:7]
+        month_agg[ym]["순매출금액"]   += date_agg[d]["순매출금액"]
+        month_agg[ym]["정산예정금액"] += date_agg[d]["정산예정금액"]
+    all_months = sorted(month_agg.keys())[-12:]
+    monthly = {
+        "labels": [f"{m[2:4]}.{m[5:7]}" for m in all_months],
+        "net":    [month_agg[m]["순매출금액"]   for m in all_months],
+        "settle": [month_agg[m]["정산예정금액"] for m in all_months],
+    }
+
+    return daily, weekly, monthly
+
 # ── 파일 탐색 ──────────────────────────────────────────────
 all_files = sorted(
     glob.glob(os.path.join(INPUT_DIR, "*.xlsx")) +
@@ -50,9 +100,8 @@ if not shop_files and not day_files:
     day_files = all_files
 
 print("=" * 54)
-print("  사방넷 매출 대시보드 생성기 v4")
+print("  사방넷 매출 대시보드 생성기 v5")
 print("=" * 54)
-
 report_date = extract_date_from_files(all_files)
 print(f"  집계 기준일: {report_date}\n")
 
@@ -84,7 +133,7 @@ for fpath in day_files:
             })
     rows.sort(key=lambda x: x["일자"])
     channel_day_data[channel] = rows
-    print(f"  ✅ {channel}: {len(rows)}행")
+    print(f"  ✅ {channel}: {len(rows)}행 파싱")
 
 # ── 쇼핑몰별 파싱 ──────────────────────────────────────────
 shop_data = []
@@ -121,95 +170,81 @@ total_net_amt    = sum(r["순매출금액"]   for r in src)
 total_settle_amt = sum(r["정산예정금액"] for r in src)
 settle_ratio     = f"{total_settle_amt/total_net_amt*100:.1f}%" if total_net_amt else "-"
 
-# ── 추이 데이터 계산 (전 채널 합산) ───────────────────────
-all_day_rows = [r for rows in channel_day_data.values() for r in rows]
+# ── HTML 생성 헬퍼 ─────────────────────────────────────────
+def jd(obj): return json.dumps(obj, ensure_ascii=False)
 
-# 날짜별 합산
-from collections import defaultdict
-date_agg = defaultdict(lambda: {"순매출금액":0,"정산예정금액":0,"주문금액":0})
-for r in all_day_rows:
-    date_agg[r["일자"]]["순매출금액"]   += r["순매출금액"]
-    date_agg[r["일자"]]["정산예정금액"] += r["정산예정금액"]
-    date_agg[r["일자"]]["주문금액"]     += r["주문금액"]
-
-sorted_dates = sorted(date_agg.keys())
-
-# 일별 최근 7일
-daily_7 = sorted_dates[-7:]
-daily_7_net = [date_agg[d]["순매출금액"] for d in daily_7]
-daily_7_set = [date_agg[d]["정산예정금액"] for d in daily_7]
-
-# 주별 최근 30일
-week_agg = defaultdict(lambda: {"순매출금액":0,"정산예정금액":0})
-for d in sorted_dates:
-    dt = datetime.strptime(d, "%Y-%m-%d")
-    # ISO 주 시작일(월요일) 기준
-    week_start = (dt - timedelta(days=dt.weekday())).strftime("%Y-%m-%d")
-    week_agg[week_start]["순매출금액"]   += date_agg[d]["순매출금액"]
-    week_agg[week_start]["정산예정금액"] += date_agg[d]["정산예정금액"]
-
-cutoff_30 = (datetime.strptime(sorted_dates[-1], "%Y-%m-%d") - timedelta(days=30)).strftime("%Y-%m-%d") if sorted_dates else ""
-weekly_keys = sorted([k for k in week_agg if k >= cutoff_30])
-weekly_net  = [week_agg[k]["순매출금액"] for k in weekly_keys]
-weekly_set  = [week_agg[k]["정산예정금액"] for k in weekly_keys]
-weekly_labels = [f"{k[5:7]}/{k[8:]}주" for k in weekly_keys]
-
-# 월별 최근 12개월
-month_agg = defaultdict(lambda: {"순매출금액":0,"정산예정금액":0})
-for d in sorted_dates:
-    ym = d[:7]
-    month_agg[ym]["순매출금액"]   += date_agg[d]["순매출금액"]
-    month_agg[ym]["정산예정금액"] += date_agg[d]["정산예정금액"]
-cutoff_12m = sorted_dates[-1][:4+1+2] if sorted_dates else ""
-all_months = sorted(month_agg.keys())[-12:]
-monthly_net  = [month_agg[m]["순매출금액"] for m in all_months]
-monthly_set  = [month_agg[m]["정산예정금액"] for m in all_months]
-monthly_labels = [f"{m[2:4]}.{m[5:7]}" for m in all_months]
-
-# ── 상세 테이블 HTML 생성 함수 ─────────────────────────────
-def make_day_table(rows):
-    html = ""
+def make_day_table_html(rows, safe_ch):
+    """날짜 필터 포함 테이블 HTML"""
+    if not rows: return ""
+    min_date = rows[0]["일자"]
+    max_date = rows[-1]["일자"]
+    tbl = ""
     for r in rows:
         net = r["순매출금액"]; settle = r["정산예정금액"]
         ratio = f"{settle/net*100:.1f}%" if net else "-"
-        html += f"""<tr>
+        tbl += f"""<tr class="data-row" data-date="{r['일자']}">
           <td>{r['일자']}</td><td class="center">{r['요일']}</td>
           <td class="num">{fmt(r['주문수량'])}</td><td class="num">{fmt(r['주문금액'])}</td>
           <td class="num red">{fmt(r['취소금액'])}</td><td class="num red">{fmt(r['반품금액'])}</td>
           <td class="num bold">{fmt(r['순매출금액'])}</td><td class="num">{fmt(r['판매수수료'])}</td>
           <td class="num purple">{fmt(r['정산예정금액'])}</td><td class="num">{ratio}</td>
         </tr>"""
-    t = {k: sum(r[k] for r in rows) for k in ["주문수량","주문금액","취소금액","반품금액","순매출금액","판매수수료","정산예정금액"]}
-    t_rat = f"{t['정산예정금액']/t['순매출금액']*100:.1f}%" if t['순매출금액'] else "-"
-    html += f"""<tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">{fmt(t['주문수량'])}</td><td class="num">{fmt(t['주문금액'])}</td>
-      <td class="num red">{fmt(t['취소금액'])}</td><td class="num red">{fmt(t['반품금액'])}</td>
-      <td class="num bold">{fmt(t['순매출금액'])}</td><td class="num">{fmt(t['판매수수료'])}</td>
-      <td class="num purple">{fmt(t['정산예정금액'])}</td><td class="num">{t_rat}</td>
-    </tr>"""
-    return html
+    return f"""
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_{safe_ch}" value="{min_date}" min="{min_date}" max="{max_date}">
+      <span>~</span>
+      <input type="date" id="to_{safe_ch}"   value="{max_date}" min="{min_date}" max="{max_date}">
+      <button onclick="filterTable('{safe_ch}')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('{safe_ch}','{min_date}','{max_date}')">초기화</button>
+      <span class="filter-result" id="result_{safe_ch}"></span>
+    </div>
+    <table id="tbl_{safe_ch}">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody>{tbl}
+        <tr class="total-row" id="total_{safe_ch}">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_{safe_ch}"></td><td class="num" id="tot_amt_{safe_ch}"></td>
+          <td class="num red" id="tot_can_{safe_ch}"></td><td class="num red" id="tot_ret_{safe_ch}"></td>
+          <td class="num bold" id="tot_net_{safe_ch}"></td><td class="num" id="tot_fee_{safe_ch}"></td>
+          <td class="num purple" id="tot_set_{safe_ch}"></td><td class="num" id="tot_rat_{safe_ch}"></td>
+        </tr>
+      </tbody>
+    </table>"""
 
-# ── JSON 직렬화 ────────────────────────────────────────────
-import json as _json
+# ── 채널별 패널 + 차트 JS 생성 ────────────────────────────
+channel_order = list(channel_day_data.keys())
+all_tab_ids   = (["shop"] if shop_data else []) + [ch.replace(" ","_") for ch in channel_order]
+first_tab     = "shop" if shop_data else (channel_order[0].replace(" ","_") if channel_order else "")
 
-def jd(obj): return _json.dumps(obj, ensure_ascii=False)
-
-channel_order  = list(channel_day_data.keys())
-all_tab_ids    = (["shop"] if shop_data else []) + channel_order
-first_tab      = "shop" if shop_data else (channel_order[0] if channel_order else "")
-
-# 채널별 차트·테이블 데이터
-ch_chart_js = ""
 ch_panels_html = ""
+ch_chart_js    = ""
 
 for i, (ch, rows) in enumerate(channel_day_data.items()):
+    safe   = ch.replace(" ", "_")
     active = "active" if (not shop_data and i == 0) else ""
-    lbl_j  = jd([r["일자"] for r in rows])
-    net_j  = jd([r["순매출금액"] for r in rows])
-    set_j  = jd([r["정산예정금액"] for r in rows])
-    tbl    = make_day_table(rows)
-    safe   = ch.replace(" ","_")
+
+    # ── 채널별 추이 계산 ──────────────────────────────────
+    daily, weekly, monthly = compute_trends(rows)
+
+    # ── 정산예정금액 막대 (원본 날짜 기준) ───────────────
+    settle_lbl = jd([r["일자"]         for r in rows])
+    settle_dat = jd([r["정산예정금액"] for r in rows])
+
+    ch_chart_js += f"""
+  // ── {ch} ──
+  makeLine('cDaily_{safe}',   {jd(daily.get('labels',[]))},   {jd(daily.get('net',[]))},   '순매출금액');
+  makeLine('cWeekly_{safe}',  {jd(weekly.get('labels',[]))},  {jd(weekly.get('net',[]))},  '순매출금액');
+  makeBar2('cMonthly_{safe}', {jd(monthly.get('labels',[]))}, {jd(monthly.get('net',[]))}, '순매출금액');
+  makeBar2('cSettle_{safe}',  {settle_lbl}, {settle_dat}, '정산예정금액');
+  calcTotal('{safe}');
+"""
+
+    tbl_html = make_day_table_html(rows, safe)
 
     ch_panels_html += f"""
 <div class="panel {active}" id="panel-{safe}">
@@ -219,47 +254,29 @@ for i, (ch, rows) in enumerate(channel_day_data.items()):
     <button class="trend-btn" onclick="switchTrend('{safe}','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-{safe}">
-      <div class="card-title">{ch} · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_{safe}"></canvas></div>
+    <div id="trend-daily-{safe}">
+      <div class="card"><div class="card-title">{ch} · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_{safe}"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-{safe}" style="display:none">
-      <div class="card-title">{ch} · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_{safe}"></canvas></div>
+    <div id="trend-weekly-{safe}" style="display:none">
+      <div class="card"><div class="card-title">{ch} · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_{safe}"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-{safe}" style="display:none">
-      <div class="card-title">{ch} · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_{safe}"></canvas></div>
+    <div id="trend-monthly-{safe}" style="display:none">
+      <div class="card"><div class="card-title">{ch} · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_{safe}"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">{ch} · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_{safe}"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">{ch} · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_{safe}"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">{ch} · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody>{tbl}</tbody></table>
+    {tbl_html}
   </div>
 </div>"""
 
-    ch_chart_js += f"""
-  // {ch}
-  makeLine('cDaily_{safe}',   {jd(daily_7)},       {jd(daily_7_net)},  '순매출금액');
-  makeLine('cWeekly_{safe}',  {jd(weekly_labels)},  {jd(weekly_net)},   '순매출금액');
-  makeBar2('cMonthly_{safe}', {jd(monthly_labels)}, {jd(monthly_net)},  '순매출금액');
-  makeBar2('cSettle_{safe}',  {lbl_j},               {set_j},            '정산예정금액');
-"""
-
-# 쇼핑몰별 패널
+# ── 쇼핑몰별 패널 ──────────────────────────────────────────
 shop_panel_html = ""
 shop_chart_js   = ""
 if shop_data:
-    s_lbl = jd([r["쇼핑몰명"] for r in shop_data])
-    s_net = jd([r["순매출금액"] for r in shop_data])
+    s_lbl = jd([r["쇼핑몰명"]     for r in shop_data])
+    s_net = jd([r["순매출금액"]   for r in shop_data])
     s_set = jd([r["정산예정금액"] for r in shop_data])
     s_tbl = ""
     for r in shop_data:
@@ -298,7 +315,9 @@ if shop_data:
     </tr></thead><tbody>{s_tbl}</tbody></table>
   </div>
 </div>"""
-    shop_chart_js = f"  makeBar2('cShopNet', {s_lbl}, {s_net}, '순매출금액');\n  makeBar2('cShopSettle', {s_lbl}, {s_set}, '정산예정금액');\n"
+    shop_chart_js = f"""
+  makeBar2('cShopNet',    {s_lbl}, {s_net}, '순매출금액');
+  makeBar2('cShopSettle', {s_lbl}, {s_set}, '정산예정금액');"""
 
 # 탭 버튼
 tab_btns = ""
@@ -349,6 +368,13 @@ body{{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);col
 .card-title{{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:14px}}
 .chart-wrap{{position:relative;height:240px}}
 .tbl-card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;overflow-x:auto;margin-bottom:14px}}
+/* 날짜 필터 */
+.date-filter{{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}}
+.date-filter label{{font-size:12px;font-weight:600;color:var(--t2)}}
+.date-filter input[type=date]{{padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;font-family:inherit}}
+.date-filter button{{padding:5px 14px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}}
+.date-filter .reset-btn{{background:var(--surface);color:var(--t2);border:1px solid var(--border)}}
+.filter-result{{font-size:11px;color:var(--t2);margin-left:4px}}
 table{{width:100%;border-collapse:collapse;font-size:12.5px}}
 thead th{{font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;padding:0 8px 9px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:left}}
 thead th.num{{text-align:right}}
@@ -360,6 +386,7 @@ td.num{{text-align:right;font-variant-numeric:tabular-nums}}
 td.center{{text-align:center}}td.red{{color:var(--red)}}
 td.purple{{color:var(--purple);font-weight:600}}td.bold{{font-weight:600}}
 tr.total-row{{font-weight:700;border-top:2px solid var(--border)!important}}
+tr.hidden{{display:none}}
 .footer{{margin-top:20px;text-align:center;font-size:11px;color:var(--t2)}}
 .panel{{display:none}}.panel.active{{display:block}}
 </style>
@@ -386,13 +413,10 @@ const COLORS=['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC48
 
 function makeLine(id, labels, data, label){{
   const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{{
-    type:'line',
-    data:{{labels,datasets:[{{label,data,
-      borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.08)',
-      pointBackgroundColor:'#3B82F6',pointRadius:4,pointHoverRadius:6,
-      tension:0.3,fill:true,borderWidth:2
-    }}]}},
+  new Chart(el.getContext('2d'),{{type:'line',
+    data:{{labels,datasets:[{{label,data,borderColor:'#3B82F6',
+      backgroundColor:'rgba(59,130,246,0.08)',pointBackgroundColor:'#3B82F6',
+      pointRadius:4,pointHoverRadius:6,tension:0.3,fill:true,borderWidth:2}}]}},
     options:{{responsive:true,maintainAspectRatio:false,
       plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>'₩'+c.parsed.y.toLocaleString()}}}}}},
       scales:{{
@@ -405,13 +429,11 @@ function makeLine(id, labels, data, label){{
 
 function makeBar2(id, labels, data, label){{
   const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{{
-    type:'bar',
+  new Chart(el.getContext('2d'),{{type:'bar',
     data:{{labels,datasets:[{{label,data,
       backgroundColor:labels.map((_,i)=>COLORS[i%COLORS.length]+'BB'),
       borderColor:labels.map((_,i)=>COLORS[i%COLORS.length]),
-      borderWidth:1.5,borderRadius:5
-    }}]}},
+      borderWidth:1.5,borderRadius:5}}]}},
     options:{{responsive:true,maintainAspectRatio:false,
       plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>'₩'+c.parsed.y.toLocaleString()}}}}}},
       scales:{{
@@ -437,14 +459,54 @@ function switchTab(tab){{
 function switchTrend(ch, type){{
   ['daily','weekly','monthly'].forEach(t=>{{
     const el=document.getElementById('trend-'+t+'-'+ch);
-    if(el) el.style.display=t===type?'block':'none';
+    if(el) el.style.display=t===type?'':'none';
   }});
-  document.querySelectorAll('#panel-'+ch+' .trend-btn').forEach((btn,i)=>{{
+  const panel=document.getElementById('panel-'+ch);
+  if(panel) panel.querySelectorAll('.trend-btn').forEach((btn,i)=>{{
     btn.classList.toggle('active',['daily','weekly','monthly'][i]===type);
   }});
 }}
 
-// 차트 초기화 (DOM 로드 완료 후)
+// 합계 행 계산
+function calcTotal(ch){{
+  const rows=[...document.querySelectorAll('#tbl_'+ch+' .data-row:not(.hidden)')];
+  const cols=['qty','amt','can','ret','net','fee','set'];
+  const idx =[2,3,4,5,6,7,8];
+  const sums=cols.map(()=>0);
+  rows.forEach(tr=>{{
+    cols.forEach((_,i)=>{{
+      const txt=tr.cells[idx[i]].textContent.replace(/[,₩]/g,'').trim();
+      sums[i]+=parseInt(txt)||0;
+    }});
+  }});
+  cols.forEach((c,i)=>{{
+    const el=document.getElementById('tot_'+c+'_'+ch);
+    if(el) el.textContent=sums[i].toLocaleString();
+  }});
+  const ratEl=document.getElementById('tot_rat_'+ch);
+  if(ratEl) ratEl.textContent=sums[4]>0?(sums[6]/sums[4]*100).toFixed(1)+'%':'-';
+  const resEl=document.getElementById('result_'+ch);
+  if(resEl) resEl.textContent=rows.length+'일 조회 중';
+}}
+
+// 날짜 필터
+function filterTable(ch){{
+  const from=document.getElementById('from_'+ch).value;
+  const to  =document.getElementById('to_'+ch).value;
+  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>{{
+    const d=tr.dataset.date;
+    tr.classList.toggle('hidden', d<from||d>to);
+  }});
+  calcTotal(ch);
+}}
+
+function resetFilter(ch, minD, maxD){{
+  document.getElementById('from_'+ch).value=minD;
+  document.getElementById('to_'+ch).value=maxD;
+  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>tr.classList.remove('hidden'));
+  calcTotal(ch);
+}}
+
 window.addEventListener('DOMContentLoaded', function(){{
 {shop_chart_js}
 {ch_chart_js}
@@ -460,10 +522,10 @@ with open(OUTPUT_FILE, "w", encoding="utf-8-sig") as f:
 history = {}
 if os.path.exists(HISTORY_FILE):
     with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-        history = _json.load(f)
+        history = json.load(f)
 history[report_date] = {ch: rows for ch, rows in channel_day_data.items()}
 with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-    _json.dump(history, f, ensure_ascii=False, indent=2)
+    json.dump(history, f, ensure_ascii=False, indent=2)
 
 print(f"\n✅ 대시보드 생성 완료!")
 print(f"   처리 채널: {', '.join(channel_order)}")

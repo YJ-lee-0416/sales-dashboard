@@ -34,6 +34,13 @@ body{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);colo
 .card-title{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:14px}
 .chart-wrap{position:relative;height:240px}
 .tbl-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;overflow-x:auto;margin-bottom:14px}
+/* 날짜 필터 */
+.date-filter{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.date-filter label{font-size:12px;font-weight:600;color:var(--t2)}
+.date-filter input[type=date]{padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;font-family:inherit}
+.date-filter button{padding:5px 14px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}
+.date-filter .reset-btn{background:var(--surface);color:var(--t2);border:1px solid var(--border)}
+.filter-result{font-size:11px;color:var(--t2);margin-left:4px}
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 thead th{font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;padding:0 8px 9px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:left}
 thead th.num{text-align:right}
@@ -45,6 +52,7 @@ td.num{text-align:right;font-variant-numeric:tabular-nums}
 td.center{text-align:center}td.red{color:var(--red)}
 td.purple{color:var(--purple);font-weight:600}td.bold{font-weight:600}
 tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
+tr.hidden{display:none}
 .footer{margin-top:20px;text-align:center;font-size:11px;color:var(--t2)}
 .panel{display:none}.panel.active{display:block}
 </style>
@@ -77,84 +85,93 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('카카오','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-카카오">
-      <div class="card-title">카카오 · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_카카오"></canvas></div>
+    <div id="trend-daily-카카오">
+      <div class="card"><div class="card-title">카카오 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_카카오"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-카카오" style="display:none">
-      <div class="card-title">카카오 · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_카카오"></canvas></div>
+    <div id="trend-weekly-카카오" style="display:none">
+      <div class="card"><div class="card-title">카카오 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_카카오"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-카카오" style="display:none">
-      <div class="card-title">카카오 · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_카카오"></canvas></div>
+    <div id="trend-monthly-카카오" style="display:none">
+      <div class="card"><div class="card-title">카카오 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_카카오"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">카카오 · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_카카오"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">카카오 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_카카오"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">카카오 · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_카카오" value="2026-06-01" min="2026-06-01" max="2026-06-11">
+      <span>~</span>
+      <input type="date" id="to_카카오"   value="2026-06-11" min="2026-06-01" max="2026-06-11">
+      <button onclick="filterTable('카카오')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('카카오','2026-06-01','2026-06-11')">초기화</button>
+      <span class="filter-result" id="result_카카오"></span>
+    </div>
+    <table id="tbl_카카오">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-01">
           <td>2026-06-01</td><td class="center">월</td>
           <td class="num">5</td><td class="num">1,026,800</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">1,026,800</td><td class="num">279,097</td>
           <td class="num purple">747,703</td><td class="num">72.8%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-02">
           <td>2026-06-02</td><td class="center">화</td>
           <td class="num">46</td><td class="num">17,443,400</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">17,443,400</td><td class="num">8,219,570</td>
           <td class="num purple">9,223,830</td><td class="num">52.9%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-04">
           <td>2026-06-04</td><td class="center">목</td>
           <td class="num">496</td><td class="num">183,267,200</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">183,267,200</td><td class="num">90,254,854</td>
           <td class="num purple">93,012,346</td><td class="num">50.8%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-05">
           <td>2026-06-05</td><td class="center">금</td>
           <td class="num">74</td><td class="num">27,129,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">27,129,000</td><td class="num">13,239,624</td>
           <td class="num purple">13,889,376</td><td class="num">51.2%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-08">
           <td>2026-06-08</td><td class="center">월</td>
           <td class="num">236</td><td class="num">84,302,400</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">84,302,400</td><td class="num">41,742,087</td>
           <td class="num purple">42,560,313</td><td class="num">50.5%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-09">
           <td>2026-06-09</td><td class="center">화</td>
           <td class="num">24</td><td class="num">9,442,500</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">9,442,500</td><td class="num">4,607,200</td>
           <td class="num purple">4,835,300</td><td class="num">51.2%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-10">
           <td>2026-06-10</td><td class="center">수</td>
           <td class="num">2</td><td class="num">278,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">278,000</td><td class="num">149,240</td>
           <td class="num purple">128,760</td><td class="num">46.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-11">
           <td>2026-06-11</td><td class="center">목</td>
           <td class="num">2</td><td class="num">757,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">757,000</td><td class="num">276,401</td>
           <td class="num purple">480,599</td><td class="num">63.5%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">885</td><td class="num">323,646,300</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">323,646,300</td><td class="num">158,768,073</td>
-      <td class="num purple">164,878,227</td><td class="num">50.9%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_카카오">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_카카오"></td><td class="num" id="tot_amt_카카오"></td>
+          <td class="num red" id="tot_can_카카오"></td><td class="num red" id="tot_ret_카카오"></td>
+          <td class="num bold" id="tot_net_카카오"></td><td class="num" id="tot_fee_카카오"></td>
+          <td class="num purple" id="tot_set_카카오"></td><td class="num" id="tot_rat_카카오"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <div class="panel " id="panel-롯데">
@@ -164,60 +181,69 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('롯데','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-롯데">
-      <div class="card-title">롯데 · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_롯데"></canvas></div>
+    <div id="trend-daily-롯데">
+      <div class="card"><div class="card-title">롯데 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_롯데"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-롯데" style="display:none">
-      <div class="card-title">롯데 · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_롯데"></canvas></div>
+    <div id="trend-weekly-롯데" style="display:none">
+      <div class="card"><div class="card-title">롯데 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_롯데"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-롯데" style="display:none">
-      <div class="card-title">롯데 · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_롯데"></canvas></div>
+    <div id="trend-monthly-롯데" style="display:none">
+      <div class="card"><div class="card-title">롯데 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_롯데"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">롯데 · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_롯데"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">롯데 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_롯데"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">롯데 · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_롯데" value="2026-06-01" min="2026-06-01" max="2026-06-09">
+      <span>~</span>
+      <input type="date" id="to_롯데"   value="2026-06-09" min="2026-06-01" max="2026-06-09">
+      <button onclick="filterTable('롯데')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('롯데','2026-06-01','2026-06-09')">초기화</button>
+      <span class="filter-result" id="result_롯데"></span>
+    </div>
+    <table id="tbl_롯데">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-01">
           <td>2026-06-01</td><td class="center">월</td>
           <td class="num">1</td><td class="num">129,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">129,000</td><td class="num">19,350</td>
           <td class="num purple">109,650</td><td class="num">85.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-04">
           <td>2026-06-04</td><td class="center">목</td>
           <td class="num">1</td><td class="num">89,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">89,000</td><td class="num">8,900</td>
           <td class="num purple">80,100</td><td class="num">90.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-05">
           <td>2026-06-05</td><td class="center">금</td>
           <td class="num">1</td><td class="num">109,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">109,000</td><td class="num">10,900</td>
           <td class="num purple">98,100</td><td class="num">90.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-09">
           <td>2026-06-09</td><td class="center">화</td>
           <td class="num">1</td><td class="num">299,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">299,000</td><td class="num">44,850</td>
           <td class="num purple">254,150</td><td class="num">85.0%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">4</td><td class="num">626,000</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">626,000</td><td class="num">84,000</td>
-      <td class="num purple">542,000</td><td class="num">86.6%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_롯데">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_롯데"></td><td class="num" id="tot_amt_롯데"></td>
+          <td class="num red" id="tot_can_롯데"></td><td class="num red" id="tot_ret_롯데"></td>
+          <td class="num bold" id="tot_net_롯데"></td><td class="num" id="tot_fee_롯데"></td>
+          <td class="num purple" id="tot_set_롯데"></td><td class="num" id="tot_rat_롯데"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <div class="panel " id="panel-CJ">
@@ -227,72 +253,81 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('CJ','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-CJ">
-      <div class="card-title">CJ · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_CJ"></canvas></div>
+    <div id="trend-daily-CJ">
+      <div class="card"><div class="card-title">CJ · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_CJ"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-CJ" style="display:none">
-      <div class="card-title">CJ · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_CJ"></canvas></div>
+    <div id="trend-weekly-CJ" style="display:none">
+      <div class="card"><div class="card-title">CJ · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_CJ"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-CJ" style="display:none">
-      <div class="card-title">CJ · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_CJ"></canvas></div>
+    <div id="trend-monthly-CJ" style="display:none">
+      <div class="card"><div class="card-title">CJ · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_CJ"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">CJ · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_CJ"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">CJ · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_CJ"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">CJ · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_CJ" value="2026-06-01" min="2026-06-01" max="2026-06-10">
+      <span>~</span>
+      <input type="date" id="to_CJ"   value="2026-06-10" min="2026-06-01" max="2026-06-10">
+      <button onclick="filterTable('CJ')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('CJ','2026-06-01','2026-06-10')">초기화</button>
+      <span class="filter-result" id="result_CJ"></span>
+    </div>
+    <table id="tbl_CJ">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-01">
           <td>2026-06-01</td><td class="center">월</td>
           <td class="num">2</td><td class="num">497,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">497,000</td><td class="num">112,955</td>
           <td class="num purple">384,045</td><td class="num">77.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-02">
           <td>2026-06-02</td><td class="center">화</td>
           <td class="num">6</td><td class="num">1,929,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">1,929,000</td><td class="num">438,411</td>
           <td class="num purple">1,490,589</td><td class="num">77.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-04">
           <td>2026-06-04</td><td class="center">목</td>
           <td class="num">4</td><td class="num">995,900</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">995,900</td><td class="num">226,342</td>
           <td class="num purple">769,558</td><td class="num">77.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-05">
           <td>2026-06-05</td><td class="center">금</td>
           <td class="num">1</td><td class="num">109,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">109,000</td><td class="num">24,773</td>
           <td class="num purple">84,227</td><td class="num">77.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-08">
           <td>2026-06-08</td><td class="center">월</td>
           <td class="num">2</td><td class="num">438,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">438,000</td><td class="num">99,546</td>
           <td class="num purple">338,454</td><td class="num">77.3%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-10">
           <td>2026-06-10</td><td class="center">수</td>
           <td class="num">1</td><td class="num">299,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">299,000</td><td class="num">67,955</td>
           <td class="num purple">231,045</td><td class="num">77.3%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">16</td><td class="num">4,267,900</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">4,267,900</td><td class="num">969,982</td>
-      <td class="num purple">3,297,918</td><td class="num">77.3%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_CJ">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_CJ"></td><td class="num" id="tot_amt_CJ"></td>
+          <td class="num red" id="tot_can_CJ"></td><td class="num red" id="tot_ret_CJ"></td>
+          <td class="num bold" id="tot_net_CJ"></td><td class="num" id="tot_fee_CJ"></td>
+          <td class="num purple" id="tot_set_CJ"></td><td class="num" id="tot_rat_CJ"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <div class="panel " id="panel-오늘의집">
@@ -302,84 +337,93 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('오늘의집','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-오늘의집">
-      <div class="card-title">오늘의집 · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_오늘의집"></canvas></div>
+    <div id="trend-daily-오늘의집">
+      <div class="card"><div class="card-title">오늘의집 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_오늘의집"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-오늘의집" style="display:none">
-      <div class="card-title">오늘의집 · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_오늘의집"></canvas></div>
+    <div id="trend-weekly-오늘의집" style="display:none">
+      <div class="card"><div class="card-title">오늘의집 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_오늘의집"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-오늘의집" style="display:none">
-      <div class="card-title">오늘의집 · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_오늘의집"></canvas></div>
+    <div id="trend-monthly-오늘의집" style="display:none">
+      <div class="card"><div class="card-title">오늘의집 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_오늘의집"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">오늘의집 · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_오늘의집"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">오늘의집 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_오늘의집"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">오늘의집 · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_오늘의집" value="2026-06-01" min="2026-06-01" max="2026-06-11">
+      <span>~</span>
+      <input type="date" id="to_오늘의집"   value="2026-06-11" min="2026-06-01" max="2026-06-11">
+      <button onclick="filterTable('오늘의집')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('오늘의집','2026-06-01','2026-06-11')">초기화</button>
+      <span class="filter-result" id="result_오늘의집"></span>
+    </div>
+    <table id="tbl_오늘의집">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-01">
           <td>2026-06-01</td><td class="center">월</td>
           <td class="num">43</td><td class="num">13,462,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">13,462,000</td><td class="num">1,403,640</td>
           <td class="num purple">12,058,360</td><td class="num">89.6%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-02">
           <td>2026-06-02</td><td class="center">화</td>
           <td class="num">7</td><td class="num">2,152,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">2,152,000</td><td class="num">215,200</td>
           <td class="num purple">1,936,800</td><td class="num">90.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-04">
           <td>2026-06-04</td><td class="center">목</td>
           <td class="num">23</td><td class="num">7,822,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">7,822,000</td><td class="num">810,920</td>
           <td class="num purple">7,011,080</td><td class="num">89.6%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-05">
           <td>2026-06-05</td><td class="center">금</td>
           <td class="num">14</td><td class="num">3,753,800</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">3,753,800</td><td class="num">375,380</td>
           <td class="num purple">3,378,420</td><td class="num">90.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-08">
           <td>2026-06-08</td><td class="center">월</td>
           <td class="num">29</td><td class="num">8,554,800</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">8,554,800</td><td class="num">843,750</td>
           <td class="num purple">7,711,050</td><td class="num">90.1%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-09">
           <td>2026-06-09</td><td class="center">화</td>
           <td class="num">21</td><td class="num">5,722,800</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">5,722,800</td><td class="num">488,925</td>
           <td class="num purple">5,233,875</td><td class="num">91.5%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-10">
           <td>2026-06-10</td><td class="center">수</td>
           <td class="num">18</td><td class="num">5,413,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">5,413,000</td><td class="num">461,395</td>
           <td class="num purple">4,951,605</td><td class="num">91.5%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-11">
           <td>2026-06-11</td><td class="center">목</td>
           <td class="num">20</td><td class="num">5,915,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">5,915,000</td><td class="num">503,420</td>
           <td class="num purple">5,411,580</td><td class="num">91.5%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">175</td><td class="num">52,795,400</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">52,795,400</td><td class="num">5,102,630</td>
-      <td class="num purple">47,692,770</td><td class="num">90.3%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_오늘의집">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_오늘의집"></td><td class="num" id="tot_amt_오늘의집"></td>
+          <td class="num red" id="tot_can_오늘의집"></td><td class="num red" id="tot_ret_오늘의집"></td>
+          <td class="num bold" id="tot_net_오늘의집"></td><td class="num" id="tot_fee_오늘의집"></td>
+          <td class="num purple" id="tot_set_오늘의집"></td><td class="num" id="tot_rat_오늘의집"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <div class="panel " id="panel-SK">
@@ -389,60 +433,69 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('SK','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-SK">
-      <div class="card-title">SK · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_SK"></canvas></div>
+    <div id="trend-daily-SK">
+      <div class="card"><div class="card-title">SK · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_SK"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-SK" style="display:none">
-      <div class="card-title">SK · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_SK"></canvas></div>
+    <div id="trend-weekly-SK" style="display:none">
+      <div class="card"><div class="card-title">SK · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_SK"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-SK" style="display:none">
-      <div class="card-title">SK · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_SK"></canvas></div>
+    <div id="trend-monthly-SK" style="display:none">
+      <div class="card"><div class="card-title">SK · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_SK"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">SK · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_SK"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">SK · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_SK"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">SK · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_SK" value="2026-06-01" min="2026-06-01" max="2026-06-10">
+      <span>~</span>
+      <input type="date" id="to_SK"   value="2026-06-10" min="2026-06-01" max="2026-06-10">
+      <button onclick="filterTable('SK')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('SK','2026-06-01','2026-06-10')">초기화</button>
+      <span class="filter-result" id="result_SK"></span>
+    </div>
+    <table id="tbl_SK">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-01">
           <td>2026-06-01</td><td class="center">월</td>
           <td class="num">2</td><td class="num">318,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">318,000</td><td class="num">71,806</td>
           <td class="num purple">246,194</td><td class="num">77.4%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-02">
           <td>2026-06-02</td><td class="center">화</td>
           <td class="num">1</td><td class="num">299,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">299,000</td><td class="num">29,900</td>
           <td class="num purple">269,100</td><td class="num">90.0%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-08">
           <td>2026-06-08</td><td class="center">월</td>
           <td class="num">1</td><td class="num">159,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">159,000</td><td class="num">35,903</td>
           <td class="num purple">123,097</td><td class="num">77.4%</td>
-        </tr><tr>
+        </tr><tr class="data-row" data-date="2026-06-10">
           <td>2026-06-10</td><td class="center">수</td>
           <td class="num">1</td><td class="num">159,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">159,000</td><td class="num">35,903</td>
           <td class="num purple">123,097</td><td class="num">77.4%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">5</td><td class="num">935,000</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">935,000</td><td class="num">173,512</td>
-      <td class="num purple">761,488</td><td class="num">81.4%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_SK">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_SK"></td><td class="num" id="tot_amt_SK"></td>
+          <td class="num red" id="tot_can_SK"></td><td class="num red" id="tot_ret_SK"></td>
+          <td class="num bold" id="tot_net_SK"></td><td class="num" id="tot_fee_SK"></td>
+          <td class="num purple" id="tot_set_SK"></td><td class="num" id="tot_rat_SK"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 <div class="panel " id="panel-W컨셉">
@@ -452,58 +505,64 @@ tr.total-row{font-weight:700;border-top:2px solid var(--border)!important}
     <button class="trend-btn" onclick="switchTrend('W컨셉','monthly')">월별 추이 (12개월)</button>
   </div>
   <div class="chart-grid">
-    <div class="card" id="trend-daily-W컨셉">
-      <div class="card-title">W컨셉 · 일별 매출 추이 (최근 7일)</div>
-      <div class="chart-wrap"><canvas id="cDaily_W컨셉"></canvas></div>
+    <div id="trend-daily-W컨셉">
+      <div class="card"><div class="card-title">W컨셉 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_W컨셉"></canvas></div></div>
     </div>
-    <div class="card" id="trend-weekly-W컨셉" style="display:none">
-      <div class="card-title">W컨셉 · 주별 매출 추이 (최근 30일)</div>
-      <div class="chart-wrap"><canvas id="cWeekly_W컨셉"></canvas></div>
+    <div id="trend-weekly-W컨셉" style="display:none">
+      <div class="card"><div class="card-title">W컨셉 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_W컨셉"></canvas></div></div>
     </div>
-    <div class="card" id="trend-monthly-W컨셉" style="display:none">
-      <div class="card-title">W컨셉 · 월별 매출 추이 (최근 12개월)</div>
-      <div class="chart-wrap"><canvas id="cMonthly_W컨셉"></canvas></div>
+    <div id="trend-monthly-W컨셉" style="display:none">
+      <div class="card"><div class="card-title">W컨셉 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_W컨셉"></canvas></div></div>
     </div>
-    <div class="card">
-      <div class="card-title">W컨셉 · 정산예정금액</div>
-      <div class="chart-wrap"><canvas id="cSettle_W컨셉"></canvas></div>
-    </div>
+    <div class="card"><div class="card-title">W컨셉 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_W컨셉"></canvas></div></div>
   </div>
   <div class="tbl-card">
     <div class="card-title">W컨셉 · 일별 상세 내역</div>
-    <table><thead><tr>
-      <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody><tr>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_W컨셉" value="2026-06-05" min="2026-06-05" max="2026-06-05">
+      <span>~</span>
+      <input type="date" id="to_W컨셉"   value="2026-06-05" min="2026-06-05" max="2026-06-05">
+      <button onclick="filterTable('W컨셉')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('W컨셉','2026-06-05','2026-06-05')">초기화</button>
+      <span class="filter-result" id="result_W컨셉"></span>
+    </div>
+    <table id="tbl_W컨셉">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-05">
           <td>2026-06-05</td><td class="center">금</td>
           <td class="num">1</td><td class="num">358,000</td>
           <td class="num red">0</td><td class="num red">0</td>
           <td class="num bold">358,000</td><td class="num">97,870</td>
           <td class="num purple">260,130</td><td class="num">72.7%</td>
-        </tr><tr class="total-row">
-      <td>합 계</td><td></td>
-      <td class="num">1</td><td class="num">358,000</td>
-      <td class="num red">0</td><td class="num red">0</td>
-      <td class="num bold">358,000</td><td class="num">97,870</td>
-      <td class="num purple">260,130</td><td class="num">72.7%</td>
-    </tr></tbody></table>
+        </tr>
+        <tr class="total-row" id="total_W컨셉">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_W컨셉"></td><td class="num" id="tot_amt_W컨셉"></td>
+          <td class="num red" id="tot_can_W컨셉"></td><td class="num red" id="tot_ret_W컨셉"></td>
+          <td class="num bold" id="tot_net_W컨셉"></td><td class="num" id="tot_fee_W컨셉"></td>
+          <td class="num purple" id="tot_set_W컨셉"></td><td class="num" id="tot_rat_W컨셉"></td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
-<div class="footer">생성: 2026-06-12 17:22 · 매출현황(일별)_다운로드_카카오.xlsx, 매출현황(일별)_다운로드_롯데.xlsx, 매출현황(일별)_다운로드_CJ.xlsx 외 3개</div>
+<div class="footer">생성: 2026-06-12 17:50 · 매출현황(일별)_다운로드_카카오.xlsx, 매출현황(일별)_다운로드_롯데.xlsx, 매출현황(일별)_다운로드_CJ.xlsx 외 3개</div>
 
 <script>
 const COLORS=['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#FEE500'];
 
 function makeLine(id, labels, data, label){
   const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{
-    type:'line',
-    data:{labels,datasets:[{label,data,
-      borderColor:'#3B82F6',backgroundColor:'rgba(59,130,246,0.08)',
-      pointBackgroundColor:'#3B82F6',pointRadius:4,pointHoverRadius:6,
-      tension:0.3,fill:true,borderWidth:2
-    }]},
+  new Chart(el.getContext('2d'),{type:'line',
+    data:{labels,datasets:[{label,data,borderColor:'#3B82F6',
+      backgroundColor:'rgba(59,130,246,0.08)',pointBackgroundColor:'#3B82F6',
+      pointRadius:4,pointHoverRadius:6,tension:0.3,fill:true,borderWidth:2}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'₩'+c.parsed.y.toLocaleString()}}},
       scales:{
@@ -516,13 +575,11 @@ function makeLine(id, labels, data, label){
 
 function makeBar2(id, labels, data, label){
   const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{
-    type:'bar',
+  new Chart(el.getContext('2d'),{type:'bar',
     data:{labels,datasets:[{label,data,
       backgroundColor:labels.map((_,i)=>COLORS[i%COLORS.length]+'BB'),
       borderColor:labels.map((_,i)=>COLORS[i%COLORS.length]),
-      borderWidth:1.5,borderRadius:5
-    }]},
+      borderWidth:1.5,borderRadius:5}]},
     options:{responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'₩'+c.parsed.y.toLocaleString()}}},
       scales:{
@@ -548,52 +605,98 @@ function switchTab(tab){
 function switchTrend(ch, type){
   ['daily','weekly','monthly'].forEach(t=>{
     const el=document.getElementById('trend-'+t+'-'+ch);
-    if(el) el.style.display=t===type?'block':'none';
+    if(el) el.style.display=t===type?'':'none';
   });
-  document.querySelectorAll('#panel-'+ch+' .trend-btn').forEach((btn,i)=>{
+  const panel=document.getElementById('panel-'+ch);
+  if(panel) panel.querySelectorAll('.trend-btn').forEach((btn,i)=>{
     btn.classList.toggle('active',['daily','weekly','monthly'][i]===type);
   });
 }
 
-// 차트 초기화 (DOM 로드 완료 후)
+// 합계 행 계산
+function calcTotal(ch){
+  const rows=[...document.querySelectorAll('#tbl_'+ch+' .data-row:not(.hidden)')];
+  const cols=['qty','amt','can','ret','net','fee','set'];
+  const idx =[2,3,4,5,6,7,8];
+  const sums=cols.map(()=>0);
+  rows.forEach(tr=>{
+    cols.forEach((_,i)=>{
+      const txt=tr.cells[idx[i]].textContent.replace(/[,₩]/g,'').trim();
+      sums[i]+=parseInt(txt)||0;
+    });
+  });
+  cols.forEach((c,i)=>{
+    const el=document.getElementById('tot_'+c+'_'+ch);
+    if(el) el.textContent=sums[i].toLocaleString();
+  });
+  const ratEl=document.getElementById('tot_rat_'+ch);
+  if(ratEl) ratEl.textContent=sums[4]>0?(sums[6]/sums[4]*100).toFixed(1)+'%':'-';
+  const resEl=document.getElementById('result_'+ch);
+  if(resEl) resEl.textContent=rows.length+'일 조회 중';
+}
+
+// 날짜 필터
+function filterTable(ch){
+  const from=document.getElementById('from_'+ch).value;
+  const to  =document.getElementById('to_'+ch).value;
+  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>{
+    const d=tr.dataset.date;
+    tr.classList.toggle('hidden', d<from||d>to);
+  });
+  calcTotal(ch);
+}
+
+function resetFilter(ch, minD, maxD){
+  document.getElementById('from_'+ch).value=minD;
+  document.getElementById('to_'+ch).value=maxD;
+  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>tr.classList.remove('hidden'));
+  calcTotal(ch);
+}
+
 window.addEventListener('DOMContentLoaded', function(){
 
 
-  // 카카오
-  makeLine('cDaily_카카오',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_카카오',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_카카오', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_카카오',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],               [747703, 9223830, 93012346, 13889376, 42560313, 4835300, 128760, 480599],            '정산예정금액');
+  // ── 카카오 ──
+  makeLine('cDaily_카카오',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],   [17443400, 183267200, 27129000, 84302400, 9442500, 278000, 757000],   '순매출금액');
+  makeLine('cWeekly_카카오',  ["06/01~", "06/08~"],  [228866400, 94779900],  '순매출금액');
+  makeBar2('cMonthly_카카오', ["26.06"], [323646300], '순매출금액');
+  makeBar2('cSettle_카카오',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"], [747703, 9223830, 93012346, 13889376, 42560313, 4835300, 128760, 480599], '정산예정금액');
+  calcTotal('카카오');
 
-  // 롯데
-  makeLine('cDaily_롯데',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_롯데',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_롯데', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_롯데',  ["2026-06-01", "2026-06-04", "2026-06-05", "2026-06-09"],               [109650, 80100, 98100, 254150],            '정산예정금액');
+  // ── 롯데 ──
+  makeLine('cDaily_롯데',   ["2026-06-01", "2026-06-04", "2026-06-05", "2026-06-09"],   [129000, 89000, 109000, 299000],   '순매출금액');
+  makeLine('cWeekly_롯데',  ["06/01~", "06/08~"],  [327000, 299000],  '순매출금액');
+  makeBar2('cMonthly_롯데', ["26.06"], [626000], '순매출금액');
+  makeBar2('cSettle_롯데',  ["2026-06-01", "2026-06-04", "2026-06-05", "2026-06-09"], [109650, 80100, 98100, 254150], '정산예정금액');
+  calcTotal('롯데');
 
-  // CJ
-  makeLine('cDaily_CJ',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_CJ',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_CJ', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_CJ',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-10"],               [384045, 1490589, 769558, 84227, 338454, 231045],            '정산예정금액');
+  // ── CJ ──
+  makeLine('cDaily_CJ',   ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-10"],   [497000, 1929000, 995900, 109000, 438000, 299000],   '순매출금액');
+  makeLine('cWeekly_CJ',  ["06/01~", "06/08~"],  [3530900, 737000],  '순매출금액');
+  makeBar2('cMonthly_CJ', ["26.06"], [4267900], '순매출금액');
+  makeBar2('cSettle_CJ',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-10"], [384045, 1490589, 769558, 84227, 338454, 231045], '정산예정금액');
+  calcTotal('CJ');
 
-  // 오늘의집
-  makeLine('cDaily_오늘의집',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_오늘의집',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_오늘의집', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_오늘의집',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],               [12058360, 1936800, 7011080, 3378420, 7711050, 5233875, 4951605, 5411580],            '정산예정금액');
+  // ── 오늘의집 ──
+  makeLine('cDaily_오늘의집',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],   [2152000, 7822000, 3753800, 8554800, 5722800, 5413000, 5915000],   '순매출금액');
+  makeLine('cWeekly_오늘의집',  ["06/01~", "06/08~"],  [27189800, 25605600],  '순매출금액');
+  makeBar2('cMonthly_오늘의집', ["26.06"], [52795400], '순매출금액');
+  makeBar2('cSettle_오늘의집',  ["2026-06-01", "2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"], [12058360, 1936800, 7011080, 3378420, 7711050, 5233875, 4951605, 5411580], '정산예정금액');
+  calcTotal('오늘의집');
 
-  // SK
-  makeLine('cDaily_SK',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_SK',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_SK', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_SK',  ["2026-06-01", "2026-06-02", "2026-06-08", "2026-06-10"],               [246194, 269100, 123097, 123097],            '정산예정금액');
+  // ── SK ──
+  makeLine('cDaily_SK',   ["2026-06-01", "2026-06-02", "2026-06-08", "2026-06-10"],   [318000, 299000, 159000, 159000],   '순매출금액');
+  makeLine('cWeekly_SK',  ["06/01~", "06/08~"],  [617000, 318000],  '순매출금액');
+  makeBar2('cMonthly_SK', ["26.06"], [935000], '순매출금액');
+  makeBar2('cSettle_SK',  ["2026-06-01", "2026-06-02", "2026-06-08", "2026-06-10"], [246194, 269100, 123097, 123097], '정산예정금액');
+  calcTotal('SK');
 
-  // W컨셉
-  makeLine('cDaily_W컨셉',   ["2026-06-02", "2026-06-04", "2026-06-05", "2026-06-08", "2026-06-09", "2026-06-10", "2026-06-11"],       [21823400, 192174100, 31458800, 93454200, 15464300, 6149000, 6672000],  '순매출금액');
-  makeLine('cWeekly_W컨셉',  ["06/01주", "06/08주"],  [260889100, 121739500],   '순매출금액');
-  makeBar2('cMonthly_W컨셉', ["26.06"], [382628600],  '순매출금액');
-  makeBar2('cSettle_W컨셉',  ["2026-06-05"],               [260130],            '정산예정금액');
+  // ── W컨셉 ──
+  makeLine('cDaily_W컨셉',   ["2026-06-05"],   [358000],   '순매출금액');
+  makeLine('cWeekly_W컨셉',  ["06/01~"],  [358000],  '순매출금액');
+  makeBar2('cMonthly_W컨셉', ["26.06"], [358000], '순매출금액');
+  makeBar2('cSettle_W컨셉',  ["2026-06-05"], [260130], '정산예정금액');
+  calcTotal('W컨셉');
 
 });
 </script>
