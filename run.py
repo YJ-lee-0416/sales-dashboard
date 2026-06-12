@@ -92,7 +92,10 @@ all_files = sorted(
 )
 if not all_files:
     print("❌ input 폴더에 xlsx 또는 xls 파일이 없습니다.")
-    input("\nEnter를 눌러 닫기..."); exit()
+    import sys
+    if sys.stdin.isatty():
+        input("\nEnter를 눌러 닫기...")
+    exit(1)
 
 shop_files = [f for f in all_files if "쇼핑몰" in os.path.basename(f)]
 day_files  = [f for f in all_files if "일별"   in os.path.basename(f)]
@@ -521,7 +524,7 @@ with open(OUTPUT_FILE, "w", encoding="utf-8-sig") as f:
 
 history = {}
 if os.path.exists(HISTORY_FILE):
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+    with open(HISTORY_FILE, "r", encoding="utf-8-sig") as f:
         history = json.load(f)
 history[report_date] = {ch: rows for ch, rows in channel_day_data.items()}
 with open(HISTORY_FILE, "w", encoding="utf-8") as f:
@@ -530,4 +533,9 @@ with open(HISTORY_FILE, "w", encoding="utf-8") as f:
 print(f"\n✅ 대시보드 생성 완료!")
 print(f"   처리 채널: {', '.join(channel_order)}")
 print(f"   저장 위치: {OUTPUT_FILE}")
-input("\nEnter를 눌러 닫기...")
+
+
+# BAT_RUN 환경변수가 없을 때만 Enter 대기 (배치 파일 자동 종료)
+import os as _os
+if not _os.environ.get("BAT_RUN"):
+    input("Enter를 눌러 닫기...")
