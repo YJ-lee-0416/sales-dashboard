@@ -64,10 +64,10 @@ tr.hidden{display:none}
   <span class="fname">매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 8개</span>
 </div>
 <div class="kpi-grid">
-  <div class="kpi k-blue"><div class="lbl">주문금액</div><div class="val">₩1,777,391,700</div><div class="sub">5,329건</div></div>
+  <div class="kpi k-blue"><div class="lbl">주문금액</div><div class="val">₩1,776,944,700</div><div class="sub">5,327건</div></div>
   <div class="kpi k-red"><div class="lbl">취소·반품</div><div class="val">₩0</div><div class="sub">취소 0 / 반품 0</div></div>
-  <div class="kpi k-green"><div class="lbl">순매출금액</div><div class="val">₩1,777,391,700</div><div class="sub">&nbsp;</div></div>
-  <div class="kpi k-purple"><div class="lbl">정산예정금액</div><div class="val">₩1,059,219,664</div><div class="sub">순매출 대비 59.6%</div></div>
+  <div class="kpi k-green"><div class="lbl">순매출금액</div><div class="val">₩1,776,944,700</div><div class="sub">&nbsp;</div></div>
+  <div class="kpi k-purple"><div class="lbl">정산예정금액</div><div class="val">₩1,058,870,210</div><div class="sub">순매출 대비 59.6%</div></div>
 </div>
 <div class="tabs">  <button class="tab-btn active" onclick="switchTab('카카오톡스토어')" id="btn-카카오톡스토어">카카오톡스토어</button>
   <button class="tab-btn " onclick="switchTab('카카오선물하기')" id="btn-카카오선물하기">카카오선물하기</button>
@@ -77,7 +77,6 @@ tr.hidden{display:none}
   <button class="tab-btn " onclick="switchTab('SK')" id="btn-SK">SK</button>
   <button class="tab-btn " onclick="switchTab('W컨셉')" id="btn-W컨셉">W컨셉</button>
   <button class="tab-btn " onclick="switchTab('0611-0612')" id="btn-0611-0612">0611-0612</button>
-  <button class="tab-btn " onclick="switchTab('롯데아이몰-0611-0612')" id="btn-롯데아이몰-0611-0612">롯데아이몰-0611-0612</button>
 </div>
 
 
@@ -1919,10 +1918,10 @@ tr.hidden{display:none}
       </tr></thead>
       <tbody><tr class="data-row" data-date="2026-06-12">
           <td>2026-06-12</td><td class="center">금</td>
-          <td class="num">2</td><td class="num">447,000</td>
+          <td class="num">1</td><td class="num">299,000</td>
           <td class="num red">0</td><td class="num red">0</td>
-          <td class="num bold">447,000</td><td class="num">97,546</td>
-          <td class="num purple">349,454</td><td class="num">78.2%</td>
+          <td class="num bold">299,000</td><td class="num">49,933</td>
+          <td class="num purple">249,067</td><td class="num">83.3%</td>
         </tr>
         <tr class="total-row" id="total_0611-0612">
           <td colspan="2">합 계</td>
@@ -1935,61 +1934,7 @@ tr.hidden{display:none}
     </table>
   </div>
 </div>
-<div class="panel " id="panel-롯데아이몰-0611-0612">
-  <div class="trend-tabs">
-    <button class="trend-btn active" onclick="switchTrend('롯데아이몰-0611-0612','daily')">일별 추이 (7일)</button>
-    <button class="trend-btn" onclick="switchTrend('롯데아이몰-0611-0612','weekly')">주별 추이 (30일)</button>
-    <button class="trend-btn" onclick="switchTrend('롯데아이몰-0611-0612','monthly')">월별 추이 (12개월)</button>
-  </div>
-  <div class="chart-grid">
-    <div id="trend-daily-롯데아이몰-0611-0612">
-      <div class="card"><div class="card-title">롯데아이몰-0611-0612 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_롯데아이몰-0611-0612"></canvas></div></div>
-    </div>
-    <div id="trend-weekly-롯데아이몰-0611-0612" style="display:none">
-      <div class="card"><div class="card-title">롯데아이몰-0611-0612 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_롯데아이몰-0611-0612"></canvas></div></div>
-    </div>
-    <div id="trend-monthly-롯데아이몰-0611-0612" style="display:none">
-      <div class="card"><div class="card-title">롯데아이몰-0611-0612 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_롯데아이몰-0611-0612"></canvas></div></div>
-    </div>
-    <div class="card"><div class="card-title">롯데아이몰-0611-0612 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_롯데아이몰-0611-0612"></canvas></div></div>
-  </div>
-  <div class="tbl-card">
-    <div class="card-title">롯데아이몰-0611-0612 · 일별 상세 내역</div>
-    
-    <div class="date-filter">
-      <label>조회 기간</label>
-      <input type="date" id="from_롯데아이몰-0611-0612" value="2026-06-12" min="2026-06-12" max="2026-06-12">
-      <span>~</span>
-      <input type="date" id="to_롯데아이몰-0611-0612"   value="2026-06-12" min="2026-06-12" max="2026-06-12">
-      <button onclick="filterTable('롯데아이몰-0611-0612')">조회</button>
-      <button class="reset-btn" onclick="resetFilter('롯데아이몰-0611-0612','2026-06-12','2026-06-12')">초기화</button>
-      <span class="filter-result" id="result_롯데아이몰-0611-0612"></span>
-    </div>
-    <table id="tbl_롯데아이몰-0611-0612">
-      <thead><tr>
-        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-      </tr></thead>
-      <tbody><tr class="data-row" data-date="2026-06-12">
-          <td>2026-06-12</td><td class="center">금</td>
-          <td class="num">1</td><td class="num">299,000</td>
-          <td class="num red">0</td><td class="num red">0</td>
-          <td class="num bold">299,000</td><td class="num">49,933</td>
-          <td class="num purple">249,067</td><td class="num">83.3%</td>
-        </tr>
-        <tr class="total-row" id="total_롯데아이몰-0611-0612">
-          <td colspan="2">합 계</td>
-          <td class="num" id="tot_qty_롯데아이몰-0611-0612"></td><td class="num" id="tot_amt_롯데아이몰-0611-0612"></td>
-          <td class="num red" id="tot_can_롯데아이몰-0611-0612"></td><td class="num red" id="tot_ret_롯데아이몰-0611-0612"></td>
-          <td class="num bold" id="tot_net_롯데아이몰-0611-0612"></td><td class="num" id="tot_fee_롯데아이몰-0611-0612"></td>
-          <td class="num purple" id="tot_set_롯데아이몰-0611-0612"></td><td class="num" id="tot_rat_롯데아이몰-0611-0612"></td>
-        </tr>
-      </tbody>
-    </table>
-  </div>
-</div>
-<div class="footer">생성: 2026-06-15 16:59 · 매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 8개</div>
+<div class="footer">생성: 2026-06-15 17:07 · 매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 8개</div>
 
 <script>
 const COLORS=['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#FEE500'];
@@ -2028,7 +1973,7 @@ function makeBar2(id, labels, data, label){
 }
 
 // 탭 전환
-const ALL_TABS = ["카카오톡스토어", "카카오선물하기", "롯데", "CJ", "오늘의집", "SK", "W컨셉", "0611-0612", "롯데아이몰-0611-0612"];
+const ALL_TABS = ["카카오톡스토어", "카카오선물하기", "롯데", "CJ", "오늘의집", "SK", "W컨셉", "0611-0612"];
 function switchTab(tab){
   ALL_TABS.forEach(t=>{
     const p=document.getElementById('panel-'+t);
@@ -2143,18 +2088,11 @@ window.addEventListener('DOMContentLoaded', function(){
   calcTotal('W컨셉');
 
   // ── 0611-0612 ──
-  makeLine('cDaily_0611-0612',   ["2026-06-12"],   [447000],   '순매출금액');
-  makeLine('cWeekly_0611-0612',  ["06/08~"],  [447000],  '순매출금액');
-  makeBar2('cMonthly_0611-0612', ["26.06"], [447000], '순매출금액');
-  makeBar2('cSettle_0611-0612',  ["2026-06-12"], [349454], '정산예정금액');
+  makeLine('cDaily_0611-0612',   ["2026-06-12"],   [299000],   '순매출금액');
+  makeLine('cWeekly_0611-0612',  ["06/08~"],  [299000],  '순매출금액');
+  makeBar2('cMonthly_0611-0612', ["26.06"], [299000], '순매출금액');
+  makeBar2('cSettle_0611-0612',  ["2026-06-12"], [249067], '정산예정금액');
   calcTotal('0611-0612');
-
-  // ── 롯데아이몰-0611-0612 ──
-  makeLine('cDaily_롯데아이몰-0611-0612',   ["2026-06-12"],   [299000],   '순매출금액');
-  makeLine('cWeekly_롯데아이몰-0611-0612',  ["06/08~"],  [299000],  '순매출금액');
-  makeBar2('cMonthly_롯데아이몰-0611-0612', ["26.06"], [299000], '순매출금액');
-  makeBar2('cSettle_롯데아이몰-0611-0612',  ["2026-06-12"], [249067], '정산예정금액');
-  calcTotal('롯데아이몰-0611-0612');
 
 });
 </script>
