@@ -24,16 +24,25 @@ def fmt(n): return f"{n:,}"
 
 def extract_channel(filename):
     name = os.path.splitext(filename)[0]
-    parts = name.split("_")
+    parts = [p for p in name.split("_") if p.strip()]
+    # 끝 부분이 날짜 범위 패턴(예: 0613-0819)이면 제외
+    while parts and re.match(r"^\d{4}-\d{4}$|^\d{8}$", parts[-1].strip()):
+        parts.pop()
     return parts[-1].strip() if parts else filename
 
 def extract_date_from_files(files):
+    """파일명에서 날짜 추출 실패 시 오늘 날짜 반환"""
     for f in files:
         m = re.search(r"(\d{8})", os.path.basename(f))
         if m:
             d = m.group(1)
             return f"{d[:4]}-{d[4:6]}-{d[6:]}"
     return datetime.today().strftime("%Y-%m-%d")
+
+def extract_latest_date_from_data(channel_day_data):
+    """파싱된 데이터에서 가장 최신 일자 추출"""
+    all_dates = [r["일자"] for rows in channel_day_data.values() for r in rows]
+    return max(all_dates) if all_dates else datetime.today().strftime("%Y-%m-%d")
 
 def compute_trends(rows):
     """채널별 rows에서 일별/주별/월별 추이 데이터 계산"""
@@ -105,7 +114,7 @@ if not shop_files and not day_files:
 print("=" * 54)
 print("  사방넷 매출 대시보드 생성기 v5")
 print("=" * 54)
-report_date = extract_date_from_files(all_files)
+report_date = extract_date_from_files(all_files)  # 파일명 기반 (데이터 파싱 후 갱신)
 print(f"  집계 기준일: {report_date}\n")
 
 # ── 채널별 일별 파싱 ───────────────────────────────────────
@@ -162,6 +171,10 @@ if shop_files:
                 "판매수수료":   to_int(row.iloc[12]),
                 "정산예정금액": to_int(row.iloc[16]),
             })
+
+# ── 데이터 기반 기준일 갱신 ────────────────────────────────
+report_date = extract_latest_date_from_data(channel_day_data)
+print(f"  집계 기준일 (데이터 기반): {report_date}")
 
 # ── KPI 집계 ───────────────────────────────────────────────
 src = shop_data if shop_data else [r for rows in channel_day_data.values() for r in rows]
