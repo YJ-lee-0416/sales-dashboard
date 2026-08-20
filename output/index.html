@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>매출 현황 대시보드 2026-06-15</title>
+<title>매출 현황 대시보드 2026-08-20</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -60,14 +60,14 @@ tr.hidden{display:none}
 <body>
 <div class="header">
   <h1>📊 매출 현황 대시보드</h1>
-  <span class="badge">2026-06-15</span>
-  <span class="fname">매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 8개</span>
+  <span class="badge">2026-08-20</span>
+  <span class="fname">매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 14개</span>
 </div>
 <div class="kpi-grid">
-  <div class="kpi k-blue"><div class="lbl">주문금액</div><div class="val">₩1,776,944,700</div><div class="sub">5,327건</div></div>
+  <div class="kpi k-blue"><div class="lbl">주문금액</div><div class="val">₩1,797,166,600</div><div class="sub">5,412건</div></div>
   <div class="kpi k-red"><div class="lbl">취소·반품</div><div class="val">₩0</div><div class="sub">취소 0 / 반품 0</div></div>
-  <div class="kpi k-green"><div class="lbl">순매출금액</div><div class="val">₩1,776,944,700</div><div class="sub">&nbsp;</div></div>
-  <div class="kpi k-purple"><div class="lbl">정산예정금액</div><div class="val">₩1,058,870,210</div><div class="sub">순매출 대비 59.6%</div></div>
+  <div class="kpi k-green"><div class="lbl">순매출금액</div><div class="val">₩1,797,166,600</div><div class="sub">&nbsp;</div></div>
+  <div class="kpi k-purple"><div class="lbl">정산예정금액</div><div class="val">₩1,074,516,428</div><div class="sub">순매출 대비 59.8%</div></div>
 </div>
 <div class="tabs">  <button class="tab-btn active" onclick="switchTab('카카오톡스토어')" id="btn-카카오톡스토어">카카오톡스토어</button>
   <button class="tab-btn " onclick="switchTab('카카오선물하기')" id="btn-카카오선물하기">카카오선물하기</button>
@@ -77,6 +77,7 @@ tr.hidden{display:none}
   <button class="tab-btn " onclick="switchTab('SK')" id="btn-SK">SK</button>
   <button class="tab-btn " onclick="switchTab('W컨셉')" id="btn-W컨셉">W컨셉</button>
   <button class="tab-btn " onclick="switchTab('0611-0612')" id="btn-0611-0612">0611-0612</button>
+  <button class="tab-btn " onclick="switchTab('0613-0819')" id="btn-0613-0819">0613-0819</button>
 </div>
 
 
@@ -1934,7 +1935,265 @@ tr.hidden{display:none}
     </table>
   </div>
 </div>
-<div class="footer">생성: 2026-06-15 17:07 · 매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 8개</div>
+<div class="panel " id="panel-0613-0819">
+  <div class="trend-tabs">
+    <button class="trend-btn active" onclick="switchTrend('0613-0819','daily')">일별 추이 (7일)</button>
+    <button class="trend-btn" onclick="switchTrend('0613-0819','weekly')">주별 추이 (30일)</button>
+    <button class="trend-btn" onclick="switchTrend('0613-0819','monthly')">월별 추이 (12개월)</button>
+  </div>
+  <div class="chart-grid">
+    <div id="trend-daily-0613-0819">
+      <div class="card"><div class="card-title">0613-0819 · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_0613-0819"></canvas></div></div>
+    </div>
+    <div id="trend-weekly-0613-0819" style="display:none">
+      <div class="card"><div class="card-title">0613-0819 · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_0613-0819"></canvas></div></div>
+    </div>
+    <div id="trend-monthly-0613-0819" style="display:none">
+      <div class="card"><div class="card-title">0613-0819 · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_0613-0819"></canvas></div></div>
+    </div>
+    <div class="card"><div class="card-title">0613-0819 · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_0613-0819"></canvas></div></div>
+  </div>
+  <div class="tbl-card">
+    <div class="card-title">0613-0819 · 일별 상세 내역</div>
+    
+    <div class="date-filter">
+      <label>조회 기간</label>
+      <input type="date" id="from_0613-0819" value="2026-06-15" min="2026-06-15" max="2026-08-19">
+      <span>~</span>
+      <input type="date" id="to_0613-0819"   value="2026-08-19" min="2026-06-15" max="2026-08-19">
+      <button onclick="filterTable('0613-0819')">조회</button>
+      <button class="reset-btn" onclick="resetFilter('0613-0819','2026-06-15','2026-08-19')">초기화</button>
+      <span class="filter-result" id="result_0613-0819"></span>
+    </div>
+    <table id="tbl_0613-0819">
+      <thead><tr>
+        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
+        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
+        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
+      </tr></thead>
+      <tbody><tr class="data-row" data-date="2026-06-15">
+          <td>2026-06-15</td><td class="center">월</td>
+          <td class="num">8</td><td class="num">2,009,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">2,009,900</td><td class="num">456,798</td>
+          <td class="num purple">1,553,102</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-16">
+          <td>2026-06-16</td><td class="center">화</td>
+          <td class="num">1</td><td class="num">299,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">299,000</td><td class="num">67,955</td>
+          <td class="num purple">231,045</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-18">
+          <td>2026-06-18</td><td class="center">목</td>
+          <td class="num">2</td><td class="num">438,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">438,000</td><td class="num">99,546</td>
+          <td class="num purple">338,454</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-19">
+          <td>2026-06-19</td><td class="center">금</td>
+          <td class="num">2</td><td class="num">178,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">178,900</td><td class="num">40,659</td>
+          <td class="num purple">138,241</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-22">
+          <td>2026-06-22</td><td class="center">월</td>
+          <td class="num">7</td><td class="num">1,014,800</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,014,800</td><td class="num">226,592</td>
+          <td class="num purple">788,208</td><td class="num">77.7%</td>
+        </tr><tr class="data-row" data-date="2026-06-23">
+          <td>2026-06-23</td><td class="center">화</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-24">
+          <td>2026-06-24</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-25">
+          <td>2026-06-25</td><td class="center">목</td>
+          <td class="num">1</td><td class="num">109,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">109,000</td><td class="num">24,773</td>
+          <td class="num purple">84,227</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-26">
+          <td>2026-06-26</td><td class="center">금</td>
+          <td class="num">1</td><td class="num">299,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">299,000</td><td class="num">67,955</td>
+          <td class="num purple">231,045</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-29">
+          <td>2026-06-29</td><td class="center">월</td>
+          <td class="num">5</td><td class="num">1,571,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,571,000</td><td class="num">357,047</td>
+          <td class="num purple">1,213,953</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-06-30">
+          <td>2026-06-30</td><td class="center">화</td>
+          <td class="num">1</td><td class="num">299,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">299,000</td><td class="num">67,955</td>
+          <td class="num purple">231,045</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-01">
+          <td>2026-07-01</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-02">
+          <td>2026-07-02</td><td class="center">목</td>
+          <td class="num">1</td><td class="num">45,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">45,900</td><td class="num">10,432</td>
+          <td class="num purple">35,468</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-03">
+          <td>2026-07-03</td><td class="center">금</td>
+          <td class="num">1</td><td class="num">45,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">45,900</td><td class="num">10,432</td>
+          <td class="num purple">35,468</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-06">
+          <td>2026-07-06</td><td class="center">월</td>
+          <td class="num">5</td><td class="num">1,233,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,233,000</td><td class="num">280,229</td>
+          <td class="num purple">952,771</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-09">
+          <td>2026-07-09</td><td class="center">목</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-13">
+          <td>2026-07-13</td><td class="center">월</td>
+          <td class="num">5</td><td class="num">1,462,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,462,000</td><td class="num">328,229</td>
+          <td class="num purple">1,133,771</td><td class="num">77.5%</td>
+        </tr><tr class="data-row" data-date="2026-07-15">
+          <td>2026-07-15</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">39,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">39,900</td><td class="num">9,068</td>
+          <td class="num purple">30,832</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-16">
+          <td>2026-07-16</td><td class="center">목</td>
+          <td class="num">6</td><td class="num">1,222,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,222,000</td><td class="num">273,683</td>
+          <td class="num purple">948,317</td><td class="num">77.6%</td>
+        </tr><tr class="data-row" data-date="2026-07-20">
+          <td>2026-07-20</td><td class="center">월</td>
+          <td class="num">1</td><td class="num">139,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">139,000</td><td class="num">31,591</td>
+          <td class="num purple">107,409</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-23">
+          <td>2026-07-23</td><td class="center">목</td>
+          <td class="num">2</td><td class="num">79,800</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">79,800</td><td class="num">18,136</td>
+          <td class="num purple">61,664</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-24">
+          <td>2026-07-24</td><td class="center">금</td>
+          <td class="num">2</td><td class="num">497,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">497,000</td><td class="num">112,955</td>
+          <td class="num purple">384,045</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-27">
+          <td>2026-07-27</td><td class="center">월</td>
+          <td class="num">5</td><td class="num">1,193,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,193,900</td><td class="num">271,342</td>
+          <td class="num purple">922,558</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-28">
+          <td>2026-07-28</td><td class="center">화</td>
+          <td class="num">1</td><td class="num">139,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">139,000</td><td class="num">31,591</td>
+          <td class="num purple">107,409</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-29">
+          <td>2026-07-29</td><td class="center">수</td>
+          <td class="num">3</td><td class="num">956,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">956,000</td><td class="num">217,274</td>
+          <td class="num purple">738,726</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-07-30">
+          <td>2026-07-30</td><td class="center">목</td>
+          <td class="num">2</td><td class="num">657,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">657,000</td><td class="num">149,319</td>
+          <td class="num purple">507,681</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-03">
+          <td>2026-08-03</td><td class="center">월</td>
+          <td class="num">2</td><td class="num">403,900</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">403,900</td><td class="num">91,796</td>
+          <td class="num purple">312,104</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-04">
+          <td>2026-08-04</td><td class="center">화</td>
+          <td class="num">1</td><td class="num">139,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">139,000</td><td class="num">31,591</td>
+          <td class="num purple">107,409</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-05">
+          <td>2026-08-05</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">139,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">139,000</td><td class="num">31,591</td>
+          <td class="num purple">107,409</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-07">
+          <td>2026-08-07</td><td class="center">금</td>
+          <td class="num">1</td><td class="num">299,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">299,000</td><td class="num">67,955</td>
+          <td class="num purple">231,045</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-10">
+          <td>2026-08-10</td><td class="center">월</td>
+          <td class="num">2</td><td class="num">716,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">716,000</td><td class="num">162,728</td>
+          <td class="num purple">553,272</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-12">
+          <td>2026-08-12</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-13">
+          <td>2026-08-13</td><td class="center">목</td>
+          <td class="num">2</td><td class="num">598,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">598,000</td><td class="num">135,910</td>
+          <td class="num purple">462,090</td><td class="num">77.3%</td>
+        </tr><tr class="data-row" data-date="2026-08-18">
+          <td>2026-08-18</td><td class="center">화</td>
+          <td class="num">7</td><td class="num">1,850,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">1,850,000</td><td class="num">412,366</td>
+          <td class="num purple">1,437,634</td><td class="num">77.7%</td>
+        </tr><tr class="data-row" data-date="2026-08-19">
+          <td>2026-08-19</td><td class="center">수</td>
+          <td class="num">1</td><td class="num">358,000</td>
+          <td class="num red">0</td><td class="num red">0</td>
+          <td class="num bold">358,000</td><td class="num">81,364</td>
+          <td class="num purple">276,636</td><td class="num">77.3%</td>
+        </tr>
+        <tr class="total-row" id="total_0613-0819">
+          <td colspan="2">합 계</td>
+          <td class="num" id="tot_qty_0613-0819"></td><td class="num" id="tot_amt_0613-0819"></td>
+          <td class="num red" id="tot_can_0613-0819"></td><td class="num red" id="tot_ret_0613-0819"></td>
+          <td class="num bold" id="tot_net_0613-0819"></td><td class="num" id="tot_fee_0613-0819"></td>
+          <td class="num purple" id="tot_set_0613-0819"></td><td class="num" id="tot_rat_0613-0819"></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+<div class="footer">생성: 2026-08-20 09:22 · 매출현황(일별)_다운로드_카카오톡스토어.xlsx, 매출현황(일별)_다운로드_카카오선물하기.xlsx, 매출현황(일별)_다운로드_롯데.xlsx 외 14개</div>
 
 <script>
 const COLORS=['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#FEE500'];
@@ -1973,7 +2232,7 @@ function makeBar2(id, labels, data, label){
 }
 
 // 탭 전환
-const ALL_TABS = ["카카오톡스토어", "카카오선물하기", "롯데", "CJ", "오늘의집", "SK", "W컨셉", "0611-0612"];
+const ALL_TABS = ["카카오톡스토어", "카카오선물하기", "롯데", "CJ", "오늘의집", "SK", "W컨셉", "0611-0612", "0613-0819"];
 function switchTab(tab){
   ALL_TABS.forEach(t=>{
     const p=document.getElementById('panel-'+t);
@@ -2093,6 +2352,13 @@ window.addEventListener('DOMContentLoaded', function(){
   makeBar2('cMonthly_0611-0612', ["26.06"], [299000], '순매출금액');
   makeBar2('cSettle_0611-0612',  ["2026-06-12"], [249067], '정산예정금액');
   calcTotal('0611-0612');
+
+  // ── 0613-0819 ──
+  makeLine('cDaily_0613-0819',   ["2026-08-05", "2026-08-07", "2026-08-10", "2026-08-12", "2026-08-13", "2026-08-18", "2026-08-19"],   [139000, 299000, 716000, 358000, 598000, 1850000, 358000],   '순매출금액');
+  makeLine('cWeekly_0613-0819',  ["07/20~", "07/27~", "08/03~", "08/10~", "08/17~"],  [715800, 2945900, 980900, 1672000, 2208000],  '순매출금액');
+  makeBar2('cMonthly_0613-0819', ["26.06", "26.07", "26.08"], [6934600, 8426400, 4860900], '순매출금액');
+  makeBar2('cSettle_0613-0819',  ["2026-06-15", "2026-06-16", "2026-06-18", "2026-06-19", "2026-06-22", "2026-06-23", "2026-06-24", "2026-06-25", "2026-06-26", "2026-06-29", "2026-06-30", "2026-07-01", "2026-07-02", "2026-07-03", "2026-07-06", "2026-07-09", "2026-07-13", "2026-07-15", "2026-07-16", "2026-07-20", "2026-07-23", "2026-07-24", "2026-07-27", "2026-07-28", "2026-07-29", "2026-07-30", "2026-08-03", "2026-08-04", "2026-08-05", "2026-08-07", "2026-08-10", "2026-08-12", "2026-08-13", "2026-08-18", "2026-08-19"], [1553102, 231045, 338454, 138241, 788208, 276636, 276636, 84227, 231045, 1213953, 231045, 276636, 35468, 35468, 952771, 276636, 1133771, 30832, 948317, 107409, 61664, 384045, 922558, 107409, 738726, 507681, 312104, 107409, 107409, 231045, 553272, 276636, 462090, 1437634, 276636], '정산예정금액');
+  calcTotal('0613-0819');
 
 });
 </script>
