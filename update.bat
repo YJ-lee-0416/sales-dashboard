@@ -13,25 +13,21 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/3] Staging files...
-git add output/index.html
+git add output/index.html run.py update.bat
 if %errorlevel% neq 0 (
     echo ERROR: git add failed.
     pause
     exit /b 1
 )
 
-for /f "tokens=1-3 delims=/" %%%%a in ("%date%") do (
-    set TODAY=%%%%c-%%%%a-%%%%b
-)
-git commit -m "update %TODAY%"
+echo.
+echo [3/3] Pushing to GitHub...
+git commit -m "update"
 if %errorlevel% neq 0 (
     echo No changes to commit.
     pause
     exit /b 0
 )
-
-echo.
-echo [3/3] Pushing to GitHub...
 git push
 if %errorlevel% neq 0 (
     echo ERROR: git push failed.
