@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매출 현황 대시보드 v2</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+/* ── 디자인 토큰: 기존 v5(run.py 내장 HTML) 팔레트 적용 ──
+   v5 원본: --bg #F5F6FA / --surface #fff / --border #E4E6EF / --t1 #1A1D2E / --t2 #6B7280
+            --blue #3B82F6 / --green #10B981 / --red #EF4444 / --purple #8B5CF6 / --r 12px
+            Chart COLORS[2] #F59E0B, 라인 채움 rgba(59,130,246,0.08) */
+:root{
+  --bg:#F5F6FA; --surface:#fff; --surface-2:#F5F6FA; --border:#E4E6EF;
+  --text:#1A1D2E; --text-2:#6B7280; --text-3:#6B7280;
+  --accent:#1A1D2E; --accent-ink:#fff;
+  --series-net:#3B82F6;     /* 주문금액 (v5 --blue) */
+  --series-settle:#8B5CF6;  /* 정산예정금액 (v5 --purple) */
+  --up:#10B981; --down:#EF4444;
+  --warn-bg:rgba(245,158,11,.14); --warn-ink:#1A1D2E;  /* v5 COLORS #F59E0B 투명도 적용 */
+  --radius:12px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:"Pretendard Variable",Pretendard,-apple-system,"Malgun Gothic",sans-serif;background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+.wrap{max-width:1280px;margin:0 auto;padding:0 20px 40px}
+.hidden{display:none!important}
+.hint{color:var(--text-3);font-size:12px}
+
+/* ① 상단 바: 제목·기준일 + 조회 기간 (스크롤 시 고정) */
+.topbar{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:1px solid var(--border);margin:0 -20px 20px;padding:14px 20px}
+.topbar-in{max-width:1240px;margin:0 auto;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.topbar h1{font-size:19px;font-weight:700;letter-spacing:-.3px}
+.topbar .meta{color:var(--text-3);font-size:12px}
+.topbar .meta b{color:var(--text-2);font-weight:600}
+.badge{display:inline-block;font-size:11px;font-weight:700;border-radius:999px;padding:2px 9px;background:var(--warn-bg);color:var(--warn-ink)}
+.filter{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.filter input[type=date]{font:inherit;font-size:13px;border:1px solid var(--border);border-radius:999px;padding:5px 10px;background:var(--surface);color:var(--text)}
+.filter .err{color:var(--down);font-size:12px;width:100%;text-align:right}
+.btn{font:inherit;font-size:13px;border:1px solid var(--border);background:var(--surface);color:var(--text-2);border-radius:999px;padding:5px 14px;cursor:pointer;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* ② KPI: 단일 스트립 */
+.kpi-strip{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpi{padding:18px 22px}
+.kpi+.kpi{border-left:1px solid var(--border)}
+.kpi .lbl{color:var(--text-2);font-size:13px;font-weight:600}
+.kpi .val{font-size:22px;font-weight:700;letter-spacing:-.4px;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpi .sub{color:var(--text-3);font-size:12px}
+.kpi-cap{color:var(--text-3);font-size:12px;margin:6px 2px 28px;text-align:right}
+
+/* ③ 채널 내비게이션: 밑줄형(최상위 계층) */
+.ch-nav{display:flex;gap:2px;border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;margin-bottom:16px}
+.ch-nav::-webkit-scrollbar{display:none}
+.tab{font:inherit;font-size:15px;border:0;background:none;color:var(--text-3);padding:10px 14px;cursor:pointer;font-weight:600;white-space:nowrap;border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);border-bottom-color:var(--accent)}
+.tab.empty{opacity:.4}
+
+/* ④ 툴바: 보기 전환을 한 줄에 */
+.toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolbar .sp{flex:1}
+.seg{display:inline-flex;background:var(--border);border-radius:999px;padding:3px}
+.seg button{font:inherit;font-size:13px;border:0;background:transparent;color:var(--text-2);border-radius:999px;padding:5px 14px;cursor:pointer;font-weight:600}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg.main button.on{background:var(--accent);color:var(--accent-ink);box-shadow:none}
+.divider{width:1px;height:20px;background:var(--border);margin:0 4px}
+.caption{display:flex;align-items:center;gap:6px;color:var(--text-3);font-size:12px;margin:10px 2px 14px}
+.info{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;border:1px solid var(--text-3);font-size:10px;font-weight:700;cursor:help}
+
+/* 카드·요약·차트 */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px;min-width:0}
+.sums{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.sums .card{padding:14px 16px}
+.sums .lbl{color:var(--text-2);font-size:12px;font-weight:600}
+.sums .val{font-size:18px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.sums .sub{color:var(--text-3);font-size:12px}
+.charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.card h3{font-size:14px;font-weight:700;margin-bottom:12px;display:flex;align-items:baseline;gap:8px}
+.chart-box{position:relative;height:260px}
+.chart-box.tall{height:340px}
+
+/* 테이블 */
+.tbl-card{padding:0;overflow:hidden}
+.tbl-card h3{padding:16px 18px 0}
+.tbl-scroll{overflow:auto;max-height:520px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;white-space:nowrap}
+th,td{padding:9px 12px;border-bottom:1px solid var(--border);text-align:right}
+th{background:var(--surface);color:var(--text-3);font-weight:600;font-size:12px;position:sticky;top:0;z-index:1;border-bottom:1px solid var(--text-3)}
+td.l,th.l{text-align:left}
+tbody tr:hover td{background:var(--bg)}
+tr.total td{font-weight:700;background:var(--surface-2);position:sticky;bottom:0;border-bottom:0}
+tr.child td{color:var(--text-2);font-size:13px;background:var(--bg)}
+tr.child td:first-child{padding-left:34px;white-space:normal;max-width:420px}
+tr[data-i]{cursor:pointer}
+#prodTable tr[data-i] td:first-child{max-width:320px;overflow:hidden;text-overflow:ellipsis}
+.tog{color:var(--text-3);display:inline-block;width:16px}
+.up{color:var(--up)} .down{color:var(--down)}
+.tag{display:inline-block;font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;margin-left:6px;background:var(--surface-2);color:var(--text-2)}
+.tag.warn{background:var(--warn-bg);color:var(--warn-ink)}
+.caption .tag{max-width:100%;white-space:normal;vertical-align:middle;margin-top:2px}
+#viewHint{min-width:0;max-width:100%}
+.caption{flex-wrap:wrap}
+.empty-state{padding:56px 20px;text-align:center;color:var(--text-2)}
+.empty-state code{background:var(--surface-2);padding:2px 8px;border-radius:6px;font-size:12px}
+footer{margin-top:28px;color:var(--text-3);font-size:12px;text-align:center}
+
+@media (max-width:900px){
+  .sums{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .charts{grid-template-columns:minmax(0,1fr)}
+  .filter{margin-left:0;width:100%}
+}
+@media (max-width:600px){
+  .wrap{padding:0 16px 32px}.topbar{margin:0 -16px 16px;padding:12px 16px}
+  .kpi-strip{grid-template-columns:minmax(0,1fr)}
+  .kpi+.kpi{border-left:0;border-top:1px solid var(--border)}
+  .kpi{padding:12px 16px;display:grid;grid-template-columns:auto 1fr;column-gap:12px;align-items:baseline}
+  .kpi .val{font-size:18px;text-align:right;margin:0}.kpi .sub{grid-column:1/-1;text-align:right}
+  .toolbar .sp,.divider{display:none}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- ① 상단 바 -->
+  <div class="topbar"><div class="topbar-in">
+    <h1>매출 현황 대시보드</h1>
+    <span class="meta">기준일 <b id="baseDate">-</b> · 원본 <b id="fileCount" title="">-</b>개 파일</span>
+    <span class="badge hidden" id="demoBanner" title="일자별 데이터는 레이아웃 확인용 가상 데이터입니다. 실제 일별 파일 투입 시 자동으로 대체되며, 이 표시도 사라집니다.">일자별 가상 데이터</span>
+    <span class="badge hidden" id="warnBadge" style="cursor:help"></span>
+    <div class="filter">
+      <input type="date" id="fStart" aria-label="시작일"><span class="hint">~</span><input type="date" id="fEnd" aria-label="종료일">
+      <button class="btn primary" id="fApply">조회</button>
+      <button class="btn" id="fReset">초기화</button>
+      <span class="err" id="fErr"></span>
+    </div>
+  </div></div>
+
+  <!-- ② KPI -->
+  <div class="kpi-strip">
+    <div class="kpi"><div class="lbl">주문금액</div><div class="val" id="kOrder">-</div><div class="sub" id="kOrderSub"></div></div>
+    <div class="kpi"><div class="lbl">판매수수료</div><div class="val" id="kFee">-</div><div class="sub" id="kFeeSub"></div></div>
+    <div class="kpi"><div class="lbl">정산예정금액</div><div class="val" id="kSettle">-</div><div class="sub" id="kSettleSub"></div></div>
+  </div>
+  <div class="kpi-cap" id="kScope"></div>
+
+  <!-- ③ 채널 -->
+  <nav class="ch-nav" id="chTabs"></nav>
+
+  <!-- ④ 툴바 -->
+  <div class="toolbar">
+    <div class="seg main" id="mainTabs">
+      <button data-v="daily" class="on">일자별</button>
+      <button data-v="product">상품별</button>
+    </div>
+    <span class="divider" id="viewDivider"></span>
+    <div class="seg" id="viewTabs">
+      <button data-v="day" class="on">일별</button>
+      <button data-v="week">주별</button>
+      <button data-v="month">월별</button>
+      <button data-v="year">연별</button>
+    </div>
+    <span class="sp"></span>
+    <div class="seg" id="modeTabs">
+      <button data-v="detail" class="on">상세</button>
+      <button data-v="summary">요약</button>
+    </div>
+  </div>
+  <div class="caption"><span id="viewHint"></span><span class="info" id="viewInfo" title="">i</span></div>
+
+  <!-- 일자별 -->
+  <section id="dailyPanel">
+    <div class="sums" id="sumCards"></div>
+    <div class="charts" id="dailyCharts">
+      <div class="card"><h3><span id="netTitle">주문금액</span></h3><div class="chart-box"><canvas id="cNet"></canvas></div></div>
+      <div class="card"><h3><span id="settleTitle">정산예정금액</span></h3><div class="chart-box"><canvas id="cSettle"></canvas></div></div>
+    </div>
+    <div class="card tbl-card" id="dailyTableCard"><h3 id="tblTitle">상세 내역</h3><div class="tbl-scroll"><table id="dailyTable"></table></div></div>
+    <div class="card empty-state hidden" id="dailyEmpty"></div>
+  </section>
+
+  <!-- 상품별 -->
+  <section id="productPanel" class="hidden">
+    <div class="charts" id="prodCharts">
+      <div class="card"><h3>모델별 주문금액 <span class="hint">상위 10</span></h3><div class="chart-box tall"><canvas id="cPNet"></canvas></div></div>
+      <div class="card"><h3>모델별 정산예정금액 <span class="hint">상위 10</span></h3><div class="chart-box tall"><canvas id="cPSettle"></canvas></div></div>
+    </div>
+    <div class="card tbl-card" id="prodTableCard"><h3>모델별 상세 <span class="hint">행 클릭 시 품번 단위 전개</span></h3><div class="tbl-scroll"><table id="prodTable"></table></div></div>
+    <div class="card empty-state hidden" id="prodEmpty"></div>
+  </section>
+
+  <footer id="footer"></footer>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+
+/* ── 유틸 ─────────────────────────────────────────── */
+const $ = id => document.getElementById(id);
+const won = n => '₩' + Math.round(n).toLocaleString('ko-KR');
+const num = n => Math.round(n).toLocaleString('ko-KR');
+const pct = (a, b) => b ? (a / b * 100).toFixed(1) + '%' : '-';
+const axis = n => Math.abs(n) >= 1e8 ? (n / 1e8).toFixed(1) + '억' : Math.abs(n) >= 1e4 ? Math.round(n / 1e4).toLocaleString('ko-KR') + '만' : n;
+const pD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const sD = dt => dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
+const add = (s, n) => { const d = pD(s); d.setDate(d.getDate() + n); return sD(d); };
+const diffDays = (a, b) => Math.round((pD(b) - pD(a)) / 864e5);
+const WD = '일월화수목금토';
+const F = ['주문수량', '주문금액', '판매수수료', '정산예정금액'];
+const zero = () => Object.fromEntries(F.map(k => [k, 0]));
+const acc = (t, r) => { F.forEach(k => t[k] += (r[k] || 0)); return t; };
+const delta = (cur, prev) => {
+  if (prev == null || !prev) return '<span class="hint">-</span>';
+  const v = (cur - prev) / prev * 100;
+  return `<span class="${v >= 0 ? 'up' : 'down'}">${v >= 0 ? '▲' : '▼'} ${Math.abs(v).toFixed(1)}%</span>`;
+};
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ── 상태 ─────────────────────────────────────────── */
+const BASE = D.meta.baseDate;
+const S = { ch: null, main: 'daily', view: 'day', mode: 'detail', range: null };
+const charts = {};
+
+function allDates() { return Object.values(D.daily).flat().map(r => r['일자']).sort(); }
+const WARN = D.meta.warnings || {};
+const warnCount = Object.values(WARN).reduce((a, w) => a + w.length, 0);
+function warnTags(ch) {
+  if (ch === D.meta.total) {
+    const cs = Object.keys(WARN);
+    return cs.length ? `<span class="tag warn" title="${Object.entries(WARN).flatMap(([c, w]) => w.map(m => c + ': ' + m)).join('\n')}">⚠ 점검 필요 채널: ${cs.join(' · ')}</span>` : '';
+  }
+  const list = WARN[ch] || [];
+  return list.map(m => `<span class="tag warn" title="${m}">⚠ ${m.length > 46 ? m.slice(0, 46) + '…' : m}</span>`).join('');
+}
+const MIN_DATE = allDates()[0] || BASE;
+
+/* 보기별 기본 집계 창 (필터 지정 시 필터 기간으로 대체) */
+function windowFor(view) {
+  if (S.range) return S.range;
+  if (view === 'day') return { s: add(BASE, -6), e: BASE };
+  if (view === 'week') return { s: add(BASE, -29), e: BASE };
+  if (view === 'month') { const b = pD(BASE); return { s: sD(new Date(b.getFullYear(), b.getMonth() - 11, 1)), e: BASE }; }
+  return { s: MIN_DATE, e: BASE };
+}
+
+/* ── 버킷(주: ISO 월~일 / 월: 달력월 / 연: 달력연도) ─────────── */
+function span(view, d) {
+  const dt = pD(d);
+  if (view === 'day') return [d, d];
+  if (view === 'week') { const ws = add(d, -((dt.getDay() + 6) % 7)); return [ws, add(ws, 6)]; }
+  if (view === 'month') return [sD(new Date(dt.getFullYear(), dt.getMonth(), 1)), sD(new Date(dt.getFullYear(), dt.getMonth() + 1, 0))];
+  return [dt.getFullYear() + '-01-01', dt.getFullYear() + '-12-31'];
+}
+function label(view, s, e) {
+  if (view === 'day') return s.slice(5) + '(' + WD[pD(s).getDay()] + ')';
+  if (view === 'week') return s.slice(5).replace('-', '/') + '~' + e.slice(5).replace('-', '/');
+  if (view === 'month') return s.slice(0, 7);
+  return s.slice(0, 4);
+}
+function buckets(rows, view, win) {
+  const full = new Map(), inWin = new Map();
+  rows.forEach(r => {
+    const [s, e] = span(view, r['일자']);
+    if (!full.has(s)) full.set(s, { s, e, t: zero() });
+    acc(full.get(s).t, r);
+    if (r['일자'] >= win.s && r['일자'] <= win.e) {
+      if (!inWin.has(s)) inWin.set(s, { s, e, t: zero(), n: 0, row: r });
+      const b = inWin.get(s); acc(b.t, r); b.n++;
+    }
+  });
+  return [...inWin.values()].sort((a, b) => a.s < b.s ? -1 : 1).map(b => {
+    const partial = b.s < win.s || b.e > win.e;
+    const prev = full.get(span(view, add(b.s, -1))[0]);
+    return { ...b, label: label(view, b.s, b.e), partial, prevNet: (!partial && prev) ? prev.t['주문금액'] : null };
+  });
+}
+const rowsIn = (rows, w) => rows.filter(r => r['일자'] >= w.s && r['일자'] <= w.e);
+
+/* ── KPI (전 채널 합산) ─────────────────────────────── */
+function renderKPI() {
+  const w = S.range || { s: MIN_DATE, e: BASE };
+  const t = Object.entries(D.daily).filter(([c]) => c !== D.meta.total).flatMap(([, r]) => r).filter(r => r['일자'] >= w.s && r['일자'] <= w.e).reduce(acc, zero());
+  $('kOrder').textContent = won(t['주문금액']); $('kOrderSub').textContent = num(t['주문수량']) + '건';
+  $('kFee').textContent = won(t['판매수수료']); $('kFeeSub').textContent = '주문금액 대비 ' + pct(t['판매수수료'], t['주문금액']);
+  $('kSettle').textContent = won(t['정산예정금액']); $('kSettleSub').textContent = '정산율 ' + pct(t['정산예정금액'], t['주문금액']);
+  $('kScope').textContent = `전 채널 합산 · ${w.s} ~ ${w.e}` + (S.range ? ' (조회 기간)' : ' (전체 기간)');
+}
+
+/* ── 채널 탭 ─────────────────────────────────────── */
+function renderChannelTabs() {
+  $('chTabs').innerHTML = D.channels.map(c => {
+    const has = (D.daily[c] || []).length || (c === D.meta.total && (D.products[c] || []).length);
+    const w = (WARN[c] || []).length ? ' <span style="color:var(--warn-ink)">⚠</span>' : '';
+    const total = c === D.meta.total ? ' style="font-weight:800"' : '';
+    return `<button class="tab ${c === S.ch ? 'on' : ''} ${has ? '' : 'empty'}"${total} data-c="${c}">${c === '미지정' ? '채널 미지정' : c}${w}</button>`;
+  }).join('');
+  $('chTabs').querySelectorAll('button').forEach(b => b.onclick = () => { S.ch = b.dataset.c; render(); });
+}
+
+/* ── 차트 공통 ─────────────────────────────────────── */
+function drawChart(id, type, labels, data, color, opt = {}) {
+  if (charts[id]) charts[id].destroy();
+  const horiz = opt.horizontal;
+  charts[id] = new Chart($(id), {
+    type,
+    data: { labels, datasets: [{ data, borderColor: color, backgroundColor: type === 'line' ? color + '14' : color,  /* 0x14 ≈ 0.08 (v5 채움 투명도) */
+      borderWidth: 2, pointRadius: 4, pointHoverRadius: 6, pointBackgroundColor: color, fill: type === 'line',
+      tension: .25, borderRadius: 4, borderSkipped: 'start', maxBarThickness: 28 }] },
+    options: {
+      indexAxis: horiz ? 'y' : 'x', maintainAspectRatio: false, animation: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => ' ' + won(horiz ? c.parsed.x : c.parsed.y) } } },
+      scales: {
+        x: { grid: { display: horiz, color: css('--border') }, ticks: Object.assign({ color: css('--text-3'), maxRotation: 0, autoSkip: true }, horiz ? { callback: v => axis(v) } : {}) },
+        y: { grid: { display: !horiz, color: css('--border') }, ticks: Object.assign({ color: css('--text-2') }, horiz ? {} : { callback: v => axis(v) }), beginAtZero: true }
+      }
+    }
+  });
+  if (horiz) charts[id].options.scales.y.ticks.callback = function (v) { const l = this.getLabelForValue(v); return l.length > 14 ? l.slice(0, 14) + '…' : l; };
+  charts[id].update();
+}
+
+/* ── 일자별 ──────────────────────────────────────── */
+const VIEW_NAME = { day: '일별', week: '주별', month: '월별', year: '연별' };
+const VIEW_DEFAULT = { day: '최근 7일', week: '최근 30일', month: '최근 12개월', year: '전체 기간' };
+const VIEW_HINT = {
+  day: '기본 집계 기간: 기준일 포함 최근 7일. 조회 기간을 지정하면 해당 기간으로 대체됩니다.',
+  week: 'ISO 주(월~일) 기준. 기본 집계 기간: 최근 30일. 집계 기간에 일부만 포함된 주는 [부분] 표시, 전주 대비 생략.',
+  month: '달력월(1일~말일) 기준. 기본 집계 기간: 최근 12개월. 진행 중인 월은 [부분] 표시, 전월 대비 생략.',
+  year: '달력연도(1~12월) 기준. 기본 집계 기간: 전체 기간.'
+};
+
+function renderDaily() {
+  const rows = D.daily[S.ch] || [];
+  const has = rows.length > 0;
+  ['sumCards', 'dailyCharts', 'dailyTableCard'].forEach(id => $(id).classList.toggle('hidden', !has));
+  $('dailyEmpty').classList.toggle('hidden', has);
+  if (!has) {
+    $('viewHint').textContent = ''; $('viewInfo').classList.add('hidden');
+    $('dailyEmpty').innerHTML = `이 채널의 일별 매출 데이터가 없습니다.<br><br>파일명 규칙: <code>매출현황_일별_다운로드_${S.ch}_YYYYMMDD.xlsx</code>`;
+    return;
+  }
+  const w = windowFor(S.view), V = S.view;
+  const B = buckets(rows, V, w);
+  $('viewHint').innerHTML = `집계 기간 ${w.s} ~ ${w.e} · ${S.range ? '조회 기간 적용' : VIEW_DEFAULT[V]}` + (S.ch === D.meta.total ? ` · ${D.channels.length - 1}개 채널 합산` : '') + warnTags(S.ch);
+  $('viewInfo').title = VIEW_HINT[V]; $('viewInfo').classList.remove('hidden');
+
+  // 요약 카드
+  const t = B.reduce((a, b) => acc(a, b.t), zero());
+  const len = diffDays(w.s, w.e) + 1;
+  const pw = { s: add(w.s, -len), e: add(w.s, -1) };
+  const prevRows = rowsIn(rows, pw);
+  const prevOk = rows[0]['일자'] <= pw.s && prevRows.length > 0;  // 직전 기간 전체가 데이터 범위 안에 있을 때만 비교
+  const fullB = B.filter(b => !b.partial);
+  const pt = prevRows.reduce(acc, zero());
+  const best = B.reduce((m, b) => (!m || b.t['주문금액'] > m.t['주문금액']) ? b : m, null);
+  const unit = { day: '일', week: '주', month: '월', year: '연' }[V];
+  $('sumCards').innerHTML = [
+    ['주문금액 합계', won(t['주문금액']), `주문 ${num(t['주문수량'])}건`],
+    ['정산예정 합계', won(t['정산예정금액']), '정산율 ' + pct(t['정산예정금액'], t['주문금액'])],
+    [`${unit} 평균 주문금액`, fullB.length ? won(fullB.reduce((a, b) => a + b.t['주문금액'], 0) / fullB.length) : '-', `완결 ${fullB.length}개 ${unit} 기준 (부분 제외)`],
+    [`최고 ${unit}`, best ? won(best.t['주문금액']) : '-', best ? best.label : ''],
+    ['직전 동일기간 대비', prevOk ? delta(t['주문금액'], pt['주문금액']) : '<span class="hint">비교 데이터 부족</span>', `${pw.s} ~ ${pw.e}`],
+  ].map(([l, v, s]) => `<div class="card"><div class="lbl">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join('');
+  $('sumCards').classList.toggle('hidden', S.mode !== 'summary');
+
+  // 차트 (연별은 로드맵 6-1에 따라 테이블만)
+  const showChart = V !== 'year';
+  $('dailyCharts').classList.toggle('hidden', !showChart);
+  if (showChart) {
+    const L = B.map(b => b.label + (b.partial ? '*' : ''));
+    $('netTitle').textContent = `주문금액 · ${VIEW_NAME[V]} 추이`;
+    $('settleTitle').textContent = `정산예정금액 · ${VIEW_NAME[V]}`;
+    drawChart('cNet', V === 'month' ? 'bar' : 'line', L, B.map(b => b.t['주문금액']), css('--series-net'));
+    drawChart('cSettle', 'bar', L, B.map(b => b.t['정산예정금액']), css('--series-settle'));
+  }
+
+  // 테이블 (상세보기에서만, 연별은 항상)
+  const showTable = S.mode === 'detail' || V === 'year';
+  $('dailyTableCard').classList.toggle('hidden', !showTable);
+  if (!showTable) return;
+  $('tblTitle').textContent = V === 'day' ? '일별 상세 내역' : `${VIEW_NAME[V]} 집계`;
+  let h;
+  if (V === 'day') {
+    h = '<thead><tr><th class="l">일자</th><th class="l">요일</th><th>주문수량</th><th>주문금액</th><th>판매수수료</th><th>정산예정금액</th><th>정산율</th></tr></thead><tbody>';
+    h += B.map(b => { const r = b.row, x = b.t; return `<tr><td class="l">${r['일자']}</td><td class="l">${r['요일'] || WD[pD(r['일자']).getDay()]}</td><td>${num(x['주문수량'])}</td><td>${num(x['주문금액'])}</td><td>${num(x['판매수수료'])}</td><td>${num(x['정산예정금액'])}</td><td>${pct(x['정산예정금액'], x['주문금액'])}</td></tr>`; }).join('');
+    h += `<tr class="total"><td class="l">합계</td><td class="l">${B.length}일</td><td>${num(t['주문수량'])}</td><td>${num(t['주문금액'])}</td><td>${num(t['판매수수료'])}</td><td>${num(t['정산예정금액'])}</td><td>${pct(t['정산예정금액'], t['주문금액'])}</td></tr>`;
+  } else {
+    const cmp = { week: '전주 대비', month: '전월 대비', year: '전년 대비' }[V];
+    h = `<thead><tr><th class="l">기간</th><th>데이터 일수</th><th>주문수량</th><th>주문금액</th><th>판매수수료</th><th>정산예정금액</th><th>정산율</th><th>${cmp}</th></tr></thead><tbody>`;
+    h += B.map(b => { const x = b.t; return `<tr><td class="l">${V === 'week' ? b.s + ' ~ ' + b.e : b.label}${b.partial ? '<span class="tag warn">부분</span>' : ''}</td><td>${b.n}</td><td>${num(x['주문수량'])}</td><td>${num(x['주문금액'])}</td><td>${num(x['판매수수료'])}</td><td>${num(x['정산예정금액'])}</td><td>${pct(x['정산예정금액'], x['주문금액'])}</td><td>${delta(x['주문금액'], b.prevNet)}</td></tr>`; }).join('');
+    h += `<tr class="total"><td class="l">합계</td><td>${B.reduce((a, b) => a + b.n, 0)}</td><td>${num(t['주문수량'])}</td><td>${num(t['주문금액'])}</td><td>${num(t['판매수수료'])}</td><td>${num(t['정산예정금액'])}</td><td>${pct(t['정산예정금액'], t['주문금액'])}</td><td></td></tr>`;
+  }
+  $('dailyTable').innerHTML = h;
+}
+
+/* ── 상품별 ──────────────────────────────────────── */
+const ymd = s => s ? s.slice(0, 4) + '-' + s.slice(4, 6) + '-' + s.slice(6, 8) : null;
+function productAgg() {
+  const snaps = D.products[S.ch] || [];
+  // 파일 기간(s~e)이 조회 기간 안에 완전히 포함될 때만 합산. 기간 정보 없는 파일은 항상 포함.
+  const used = snaps.filter(sn => !S.range || !sn.s || (sn.s >= S.range.s && sn.e <= S.range.e));
+  const items = new Map();
+  used.forEach(sn => sn.rows.forEach(r => {
+    const k = (r['품번코드'] || '-') + '|' + r['수집상품명'];
+    if (!items.has(k)) items.set(k, { 품번코드: r['품번코드'], 수집상품명: r['수집상품명'], 모델명: r['모델명'], 매핑: r['매핑'], t: zero() });
+    acc(items.get(k).t, r);
+  }));
+  const models = new Map();
+  items.forEach(it => {
+    if (!models.has(it.모델명)) models.set(it.모델명, { 모델명: it.모델명, t: zero(), kids: [], 매핑: new Set() });
+    const m = models.get(it.모델명); acc(m.t, it.t); m.kids.push(it); m.매핑.add(it.매핑);
+  });
+  const list = [...models.values()].sort((a, b) => b.t['주문금액'] - a.t['주문금액']);
+  list.forEach(m => m.kids.sort((a, b) => b.t['주문금액'] - a.t['주문금액']));
+  return { snaps, used, list };
+}
+
+function renderProduct() {
+  const { snaps, used, list } = productAgg();
+  const has = list.length > 0;
+  ['prodCharts', 'prodTableCard'].forEach(id => $(id).classList.toggle('hidden', !has));
+  $('prodEmpty').classList.toggle('hidden', has);
+  const undated = used.filter(s => !s.s).length;
+  const dated = used.filter(s => s.s);
+  const periods = dated.length > 2
+    ? [`${dated.map(s => s.s).sort()[0]} ~ ${dated.map(s => s.e).sort().slice(-1)[0]} (${dated.length}개 파일)`]
+    : dated.map(s => s.s === s.e ? s.s : `${s.s} ~ ${s.e}`);
+  $('viewHint').innerHTML = snaps.length
+    ? `상품별 파일 ${used.length}/${snaps.length}개 반영` + (periods.length ? ` · 파일 기간 ${periods.join(', ')}` : '')
+      + (undated ? `<span class="tag warn">기간 정보 없는 파일 ${undated}개 포함</span>` : '')
+    : '';
+  $('viewInfo').title = '상품별 파일의 기간은 파일명에서 판독합니다(YYYYMMDD = 해당일, YYMM = 해당 월). 조회 기간을 지정하면 파일 기간이 조회 기간 안에 완전히 포함되는 파일만 합산하며, 기간 정보가 없는 파일은 항상 포함됩니다.';
+  $('viewInfo').classList.toggle('hidden', !snaps.length);
+  if (!has) {
+    const totSnaps = (D.products[D.meta.total] || []).length;
+    $('prodEmpty').innerHTML = snaps.length ? '조회 기간 안에 완전히 포함되는 상품별 파일이 없습니다. 파일 기간은 ⓘ 안내를 참고하십시오.'
+      : `이 채널의 상품별 매출 데이터가 없습니다.` + (totSnaps && S.ch !== D.meta.total ? `<br>채널 구분 없이 제공된 상품별 파일은 <b>${D.meta.total}</b> 탭에서 확인할 수 있습니다.` : '')
+        + `<br><br>채널별 파일명 규칙: <code>매출현황_상품별_다운로드_${S.ch}_YYYYMMDD.xlsx</code>`;
+    return;
+  }
+  const top = (k) => [...list].sort((a, b) => b.t[k] - a.t[k]).slice(0, 10);
+  const tn = top('주문금액'), ts = top('정산예정금액');
+  drawChart('cPNet', 'bar', tn.map(m => m.모델명), tn.map(m => m.t['주문금액']), css('--series-net'), { horizontal: true });
+  drawChart('cPSettle', 'bar', ts.map(m => m.모델명), ts.map(m => m.t['정산예정금액']), css('--series-settle'), { horizontal: true });
+
+  const T = list.reduce((a, m) => acc(a, m.t), zero());
+  const tagOf = s => s.has('raw') ? '<span class="tag warn">미매핑</span>' : s.has('keyword') ? '<span class="tag">키워드 매핑</span>' : '';
+  let h = '<thead><tr><th class="l">모델명</th><th class="l">품번코드</th><th>주문수량</th><th>주문금액</th><th>정산예정금액</th><th>정산율</th><th>주문금액 비중</th></tr></thead><tbody>';
+  list.forEach((m, i) => {
+    const codes = [...new Set(m.kids.map(k => k.품번코드 || '-'))].join(', ');
+    const x = m.t;
+    h += `<tr data-i="${i}"><td class="l" title="${m.모델명}"><span class="tog">▸</span>${m.모델명}${tagOf(m.매핑)}</td><td class="l">${codes}</td><td>${num(x['주문수량'])}</td><td>${num(x['주문금액'])}</td><td>${num(x['정산예정금액'])}</td><td>${pct(x['정산예정금액'], x['주문금액'])}</td><td>${pct(x['주문금액'], T['주문금액'])}</td></tr>`;
+    m.kids.forEach(k => { const y = k.t;
+      h += `<tr class="child hidden" data-p="${i}"><td class="l">${k.수집상품명}</td><td class="l">${k.품번코드 || '-'}</td><td>${num(y['주문수량'])}</td><td>${num(y['주문금액'])}</td><td>${num(y['정산예정금액'])}</td><td>${pct(y['정산예정금액'], y['주문금액'])}</td><td>${pct(y['주문금액'], T['주문금액'])}</td></tr>`; });
+  });
+  h += `<tr class="total"><td class="l">합계 (${list.length}개 모델)</td><td class="l"></td><td>${num(T['주문수량'])}</td><td>${num(T['주문금액'])}</td><td>${num(T['정산예정금액'])}</td><td>${pct(T['정산예정금액'], T['주문금액'])}</td><td>100.0%</td></tr>`;
+  $('prodTable').innerHTML = h;
+  $('prodTable').querySelectorAll('tr[data-i]').forEach(tr => tr.onclick = () => {
+    const kids = $('prodTable').querySelectorAll(`tr[data-p="${tr.dataset.i}"]`);
+    const open = kids[0] && kids[0].classList.contains('hidden');
+    kids.forEach(k => k.classList.toggle('hidden', !open));
+    tr.querySelector('.tog').textContent = open ? '▾' : '▸';
+  });
+}
+
+/* ── 렌더 ────────────────────────────────────────── */
+function setSeg(id, v) { $(id).querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); }
+function render() {
+  // 상품별 보기는 '전체' 탭 전용. 개별 채널 조회 시 일자별만 표시
+  const prodOK = S.ch === D.meta.total;
+  if (!prodOK) S.main = 'daily';
+  $('mainTabs').classList.toggle('hidden', !prodOK);
+  renderChannelTabs(); renderKPI();
+  setSeg('mainTabs', S.main); setSeg('viewTabs', S.view); setSeg('modeTabs', S.mode);
+  $('dailyPanel').classList.toggle('hidden', S.main !== 'daily');
+  $('productPanel').classList.toggle('hidden', S.main !== 'product');
+  const isD = S.main === 'daily';
+  ['viewTabs', 'modeTabs'].forEach(id => $(id).classList.toggle('hidden', !isD));
+  $('viewDivider').classList.toggle('hidden', !isD || !prodOK);
+  $('fReset').classList.toggle('hidden', !S.range);
+  S.main === 'daily' ? renderDaily() : renderProduct();
+}
+[['mainTabs', 'main'], ['viewTabs', 'view'], ['modeTabs', 'mode']].forEach(([id, k]) =>
+  $(id).querySelectorAll('button').forEach(b => b.onclick = () => { S[k] = b.dataset.v; render(); }));
+$('fApply').onclick = () => {
+  const s = $('fStart').value, e = $('fEnd').value;
+  $('fErr').textContent = '';
+  if (!s || !e) { $('fErr').textContent = '시작일과 종료일을 모두 지정하십시오.'; return; }
+  if (s > e) { $('fErr').textContent = '시작일이 종료일보다 늦습니다.'; return; }
+  S.range = { s, e }; render();
+};
+$('fReset').onclick = () => { S.range = null; $('fStart').value = ''; $('fEnd').value = ''; $('fErr').textContent = ''; render(); };
+
+/* 초기화 */
+$('baseDate').textContent = BASE;
+$('fileCount').textContent = D.meta.files.length; $('fileCount').title = D.meta.files.join('\n');
+$('demoBanner').classList.toggle('hidden', !D.meta.demo);
+if (warnCount) { const b = $('warnBadge'); b.classList.remove('hidden'); b.textContent = `데이터 점검 ${warnCount}건`;
+  b.title = Object.entries(WARN).flatMap(([c, w]) => w.map(m => '· ' + c + ': ' + m)).join('\n'); }
+$('fStart').min = $('fEnd').min = MIN_DATE; $('fStart').max = $('fEnd').max = BASE;
+$('footer').innerHTML = `생성일시 ${D.meta.generatedAt} · 대시보드 ${D.meta.version} · <span title="${D.meta.files.join('\n')}" style="cursor:help;text-decoration:underline dotted">원본 ${D.meta.files.length}개 파일</span>`;
+S.ch = D.channels.find(c => (D.daily[c] || []).length || (D.products[c] || []).length) || D.channels[0];
+render();
+</script>
+</body>
+</html>

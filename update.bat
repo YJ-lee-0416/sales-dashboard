@@ -1,42 +1,39 @@
 @echo off
-cd /d C:\sales_tracking
+chcp 65001 > nul
+setlocal
+cd /d "%~dp0"
 
-echo.
-echo [1/3] Processing data...
-set BAT_RUN=1
+echo [1/3] Building dashboard (input -^> output\index.html)...
 python run.py
-if %errorlevel% neq 0 (
-    echo ERROR: run.py failed.
-    pause
-    exit /b 1
+if errorlevel 1 (
+  echo [ERROR] Build failed. Nothing was uploaded.
+  pause
+  exit /b 1
 )
 
-echo.
-echo [2/3] Staging files...
-git add output/index.html run.py update.bat
-if %errorlevel% neq 0 (
-    echo ERROR: git add failed.
+echo [2/3] Committing...
+git add output/index.html run.py template_v2.html update.bat requirements.txt
+git diff --cached --quiet
+if errorlevel 1 (
+  git commit -m "update"
+  if errorlevel 1 (
+    echo [ERROR] Commit failed. Check git user.name / user.email settings.
     pause
     exit /b 1
+  )
+) else (
+  echo No changes to upload.
+  pause
+  exit /b 0
 )
 
-echo.
-echo [3/3] Pushing to GitHub...
-git commit -m "update"
-if %errorlevel% neq 0 (
-    echo No changes to commit.
-    pause
-    exit /b 0
+echo [3/3] Uploading to GitHub...
+git push origin main
+if errorlevel 1 (
+  echo [ERROR] Push failed. Check login or network.
+  pause
+  exit /b 1
 )
-git push
-if %errorlevel% neq 0 (
-    echo ERROR: git push failed.
-    pause
-    exit /b 1
-)
-
-echo.
-echo Done! Dashboard will be updated in 1-2 minutes.
+echo Done. Dashboard refreshes in 1-2 minutes:
 echo https://YJ-lee-0416.github.io/sales-dashboard/
-echo.
 pause

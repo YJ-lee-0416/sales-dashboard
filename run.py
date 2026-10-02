@@ -1,554 +1,344 @@
-# ============================================================
-# 사방넷 매출 자동 가공 스크립트 v5
-# ============================================================
+# -*- coding: utf-8 -*-
+"""
+매출 대시보드 v2 - run.py v6 (사방넷 엑셀 → output/index.html)
+사용: python run.py   (기본 경로: ./input → ./output/index.html, 템플릿 ./template_v2.html)
 
+역할
+  1) 사방넷 '상품별' 다운로드 파일 파싱 + 모델명 매핑 (1순위 품번코드 / 2순위 키워드 / 3순위 원문)
+  2) 파싱 결과를 원본 '합 계' 행과 대조 검증 (불일치 시 즉시 중단)
+  3) DASHBOARD_DATA(JSON) 생성 → template_v2.html 의 /*__DATA__*/ 자리에 주입 → index.html 출력
+
+주의
+  - 일별 파일 파서(parse_day_file)는 로드맵 3-2 인덱스 기준으로 작성되었으나
+    실제 일별 샘플 파일이 미제공되어 검증되지 않았습니다.
+  - --demo 옵션 시 일자별 데이터는 렌더링 확인용 '가상 데이터'로 채워집니다(meta.demo=True → 화면 경고 배너).
+"""
+import os, re, sys, json, glob, random, argparse
+from datetime import datetime, date, timedelta
+from collections import OrderedDict
+import warnings
 import pandas as pd
-import os, glob, json, re
-from datetime import datetime, timedelta
-from collections import defaultdict
+warnings.filterwarnings("ignore", message="Workbook contains no default style")
 
-BASE_DIR     = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR    = os.path.join(BASE_DIR, "input")
-OUTPUT_DIR   = os.path.join(BASE_DIR, "output")
-HISTORY_FILE = os.path.join(BASE_DIR, "history.json")
-OUTPUT_FILE  = os.path.join(OUTPUT_DIR, "index.html")
+CHANNELS = ["카카오톡스토어", "카카오선물하기", "롯데", "CJ", "오늘의집", "SK", "W컨셉", "CJ온스타일"]
+UNASSIGNED = "미지정"
 
-os.makedirs(INPUT_DIR,  exist_ok=True)
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# ── 4-2. 모델명 매핑 (품번코드 → 축약명) ───────────────────────────────
+MODEL_MAP = {
+    "100071": "CX PRO N_혼합", "100085": "CX PRO N_물걸레", "100084": "CX PRO N_단품",
+    "100047": "CX PRO N_기본세트", "100072": "CV6+", "100087": "CV6+ADD", "100018": "CV6+",
+    "100070": "에이센스", "100059": "에이센스", "100073": "MT7", "100088": "미니클린",
+    "100076": "THC1000", "100032": "THC1000", "100044": "CM6+ADD", "100079": "펫드라이룸",
+    "100045": "아쿠아샷", "100080": "HC501", "100089": "HC601", "100074": "고데기",
+    "100075": "고데기_블랙", "100066": "CXPRON 배터리", "100067": "CXPRO 먼지봉투",
+    "100092": "SC360",
+    # ── 구 품번·채널 전용 품번 (상품리스트 260923 미등록, 상품명 기준 수동 지정) ──
+    "100083": "에이센스",          # [십일절] 에이센스 BLDC 자동충전 거치대 무선청소기
+    "100064": "CX PRO N_물걸레",   # CX PRO 매직타워 N +물걸레키트 세트  ※ 혼합/물걸레 구분 확인 필요
+    "100090": "CM6+ADD",           # 무선 욕실청소기 CM6 PLUS ADDITION
+    "100055": "MT7",               # 미니 핸디형 무선 청소기 미니멀 투인원 MT7
+    "100029": "CV6+ADD",           # CV6 PLUS ADDITION 무선청소기 풀패키지
+    "100051": "미니클린",          # 소형 무선청소기 Mini Clean(미니클린) / 블랙
+    "100086": "미니클린",          # [십일절] MT8 미니클린 핸디형 미니 무선 청소기
+    "100069": "HC501",             # 슈퍼에어릭HC501 BLDC 헤어 드라이어
+    "100021": "고데기",            # SECRET 01 대용량 배터리 무선고데기 화이트
+    "100016": "CV6+",              # [GS특가] CV6 PLUS 무선청소기 + 2년무상AS
+    "100058": "HC501",             # 슈퍼 에어릭 헤어 드라이어 (2608 파일 상품명에 HC501 표기)
+    "100068": "펫드라이룸",        # 펫드라이룸 반려동물 털 건조기
+    "100077": "CM6+ADD",           # 무선 욕실청소기 CM6 PLUS ADDITION 길이 각도 조절
+    "100027": "고데기_블랙",       # 시크릿 미드나잇 블랙 에디션 무선 고데기
+    "100078": "아쿠아샷",          # 휴대용 무선 아쿠아샷 구강세정기 TC7
+    # 단종·비주력 모델 → '기타'로 합산 (사용자 확정 2026-10-02)
+    "100030": "기타",              # NF8 2in1 흡입 물걸레 무선 청소기
+    "100081": "기타",              # 2in1 물걸레+진공 무선청소기 NF8 자동충전 거치대
+    "100015": "기타",              # 3in1 물걸레 로봇 청소기 CR3
+    "100061": "기타",              # 무선청소기 HC02
+}
+# 2순위: 품번코드 누락 시에만 적용. 구체적 키워드를 먼저 배치(예: '배터리'가 'CX PRO'보다 우선).
+# 본체 CX PRO N은 구성(혼합/물걸레/단품) 판별이 불가하므로 키워드 매핑 대상에서 제외 → 원문 표시.
+KEYWORD_MAP = [
+    (r"먼지봉투", "CXPRO 먼지봉투"),
+    (r"미드나잇\s*블랙", "고데기_블랙"),
+    (r"고데기|SECRET\s*01", "고데기"),
+    (r"CX\s*PRO.*배터리|전용\s*배터리", "CXPRON 배터리"),
+    (r"CX\s*PRO.*물걸레", "CX PRO N_물걸레"),    # 품번 누락 '[베스트셀러] CX PRO N +물걸레키트 세트' (사용자 확정)
+    (r"스티미|SC\s*360", "SC360"),
+    (r"CV6.*ADDITION|CV6\+?ADD", "CV6+ADD"),
+    (r"CV6", "CV6+"),
+    (r"CM6", "CM6+ADD"),
+    (r"에이센스|A\s*sense", "에이센스"),
+    (r"MT7|미니멀\s*투인원", "MT7"),
+    (r"미니클린|Mini\s*Clean|MT8", "미니클린"),
+    (r"THC[-\s]?1000", "THC1000"),
+    (r"펫드라이룸", "펫드라이룸"),
+    (r"아쿠아샷|AQUA\s*SHOT", "아쿠아샷"),
+    (r"HC\s*501", "HC501"),
+    (r"HC\s*601", "HC601"),
+]
 
-def to_int(val):
-    try: return int(str(val).replace(",","").replace(" ","").replace("\xa0",""))
-    except: return 0
 
-def fmt(n): return f"{n:,}"
+def to_int(v):
+    """숫자/콤마 문자열('3,140,999')/NaN/퍼센트 모두 안전 처리."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return 0
+    if isinstance(v, (int, float)):
+        return int(round(v))
+    s = str(v).replace(",", "").replace("₩", "").strip()
+    if s in ("", "-", "nan"):
+        return 0
+    try:
+        return int(round(float(s)))
+    except ValueError:
+        return 0
+
+
+def norm_code(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v).strip()
+
+
+def map_model(code, name):
+    if code and code in MODEL_MAP:
+        return MODEL_MAP[code], "code"
+    if not code:
+        for pat, model in KEYWORD_MAP:
+            if re.search(pat, name, re.I):
+                return model, "keyword"
+    return name, "raw"
+
+
+def is_total_row(row):
+    return re.sub(r"\s", "", str(row.iloc[0])) == "합계"
+
+
+DATE_TOKEN = r"^\d{4}-\d{4}$|^\d{8}$|^\d{4}$|^\d{6}$"
+
 
 def extract_channel(filename):
-    name = os.path.splitext(filename)[0]
-    parts = [p for p in name.split("_") if p.strip()]
-    # 끝 부분이 날짜 범위 패턴(예: 0613-0819)이면 제외
-    while parts and re.match(r"^\d{4}-\d{4}$|^\d{8}$", parts[-1].strip()):
+    name = os.path.splitext(os.path.basename(filename))[0]
+    name = re.sub(r"(?<!\d)\d{4}-\d{4}(?!\d)", "", name)            # MMDD-MMDD 범위 제거
+    parts = [p.strip() for p in re.split(r"[_\-]", name) if p.strip()]
+    while parts and re.match(DATE_TOKEN, parts[-1]):
         parts.pop()
-    return parts[-1].strip() if parts else filename
+    ch = parts[-1] if parts else ""
+    # 채널명이 아닌 토큰(예: '다운로드', '다운로드 1')이 남으면 '미지정'
+    return UNASSIGNED if (not ch or "다운로드" in ch or "매출현황" in ch) else ch
 
-def extract_date_from_files(files):
-    """파일명에서 날짜 추출 실패 시 오늘 날짜 반환"""
-    for f in files:
-        m = re.search(r"(\d{8})", os.path.basename(f))
-        if m:
-            d = m.group(1)
-            return f"{d[:4]}-{d[4:6]}-{d[6:]}"
-    return datetime.today().strftime("%Y-%m-%d")
 
-def extract_latest_date_from_data(channel_day_data):
-    """파싱된 데이터에서 가장 최신 일자 추출"""
-    all_dates = [r["일자"] for rows in channel_day_data.values() for r in rows]
-    return max(all_dates) if all_dates else datetime.today().strftime("%Y-%m-%d")
+def extract_file_period(filename):
+    """파일명 기간 토큰 → (시작일, 종료일). YYYYMMDD=해당일, YYMM(4자리)=해당 월. 없으면 (None, None)."""
+    base = os.path.basename(filename)
+    m = re.search(r"(?<!\d)(20\d{6})(?!\d)", base)
+    if m:
+        d = datetime.strptime(m.group(1), "%Y%m%d").strftime("%Y-%m-%d"); return d, d
+    m = re.search(r"(?<!\d)(\d{2})(0[1-9]|1[0-2])(?!\d)", base)
+    if m:
+        y, mo = 2000 + int(m.group(1)), int(m.group(2))
+        last = (date(y + (mo == 12), mo % 12 + 1, 1) - timedelta(days=1)).day
+        return f"{y}-{mo:02d}-01", f"{y}-{mo:02d}-{last:02d}"
+    return None, None
 
-def compute_trends(rows):
-    """채널별 rows에서 일별/주별/월별 추이 데이터 계산"""
-    date_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
-    for r in rows:
-        date_agg[r["일자"]]["순매출금액"]   += r["순매출금액"]
-        date_agg[r["일자"]]["정산예정금액"] += r["정산예정금액"]
-    sorted_dates = sorted(date_agg.keys())
-    if not sorted_dates:
-        return {}, {}, {}
 
-    # 일별 최근 7일
-    daily_keys = sorted_dates[-7:]
-    daily = {
-        "labels": daily_keys,
-        "net":    [date_agg[d]["순매출금액"]   for d in daily_keys],
-        "settle": [date_agg[d]["정산예정금액"] for d in daily_keys],
-    }
+# ── 상품별 파서 + 합계 대조 ───────────────────────────────────────────
+PRODUCT_FIELDS = [("주문수량", 3), ("주문금액", 4), ("취소수량", 5), ("취소금액", 6),
+                  ("반품수량", 7), ("반품금액", 8), ("순매출수량", 9), ("순매출금액", 10),
+                  ("총이익액", 11), ("판매수수료", 13), ("정산예정금액", 17)]
 
-    # 주별 최근 30일
-    week_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
-    for d in sorted_dates:
-        dt = datetime.strptime(d, "%Y-%m-%d")
-        week_start = (dt - timedelta(days=dt.weekday())).strftime("%Y-%m-%d")
-        week_agg[week_start]["순매출금액"]   += date_agg[d]["순매출금액"]
-        week_agg[week_start]["정산예정금액"] += date_agg[d]["정산예정금액"]
-    last_date = datetime.strptime(sorted_dates[-1], "%Y-%m-%d")
-    cutoff_30 = (last_date - timedelta(days=30)).strftime("%Y-%m-%d")
-    weekly_keys = sorted(k for k in week_agg if k >= cutoff_30)
-    weekly = {
-        "labels": [f"{k[5:7]}/{k[8:]}~" for k in weekly_keys],
-        "net":    [week_agg[k]["순매출금액"]   for k in weekly_keys],
-        "settle": [week_agg[k]["정산예정금액"] for k in weekly_keys],
-    }
 
-    # 월별 최근 12개월
-    month_agg = defaultdict(lambda: {"순매출금액": 0, "정산예정금액": 0})
-    for d in sorted_dates:
-        ym = d[:7]
-        month_agg[ym]["순매출금액"]   += date_agg[d]["순매출금액"]
-        month_agg[ym]["정산예정금액"] += date_agg[d]["정산예정금액"]
-    all_months = sorted(month_agg.keys())[-12:]
-    monthly = {
-        "labels": [f"{m[2:4]}.{m[5:7]}" for m in all_months],
-        "net":    [month_agg[m]["순매출금액"]   for m in all_months],
-        "settle": [month_agg[m]["정산예정금액"] for m in all_months],
-    }
-
-    return daily, weekly, monthly
-
-# ── 파일 탐색 ──────────────────────────────────────────────
-all_files = sorted(
-    glob.glob(os.path.join(INPUT_DIR, "*.xlsx")) +
-    glob.glob(os.path.join(INPUT_DIR, "*.xls")),
-    key=os.path.getmtime
-)
-if not all_files:
-    print("❌ input 폴더에 xlsx 또는 xls 파일이 없습니다.")
-    import sys
-    if sys.stdin.isatty():
-        input("\nEnter를 눌러 닫기...")
-    exit(1)
-
-shop_files = [f for f in all_files if "쇼핑몰" in os.path.basename(f)]
-day_files  = [f for f in all_files if "일별"   in os.path.basename(f)]
-if not shop_files and not day_files:
-    day_files = all_files
-
-print("=" * 54)
-print("  사방넷 매출 대시보드 생성기 v5")
-print("=" * 54)
-report_date = extract_date_from_files(all_files)  # 파일명 기반 (데이터 파싱 후 갱신)
-print(f"  집계 기준일: {report_date}\n")
-
-# ── 채널별 일별 파싱 ───────────────────────────────────────
-channel_day_data = {}
-for fpath in day_files:
-    channel = extract_channel(os.path.basename(fpath))
+def parse_product_file(fpath):
     df = pd.read_excel(fpath, header=None)
-    rows = []
+    rows, total = [], None
     for i, row in df.iterrows():
-        if i < 3: continue
-        val = str(row.iloc[0]).strip()
-        if val in ["합 계","합계","NaN","nan",""]: continue
-        if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() != "":
-            rows.append({
-                "일자":         str(row.iloc[1]).strip(),
-                "요일":         str(row.iloc[2]).strip(),
-                "주문수량":     to_int(row.iloc[3]),
-                "주문금액":     to_int(row.iloc[4]),
-                "취소수량":     to_int(row.iloc[5]),
-                "취소금액":     to_int(row.iloc[6]),
-                "반품수량":     to_int(row.iloc[7]),
-                "반품금액":     to_int(row.iloc[8]),
-                "순매출수량":   to_int(row.iloc[9]),
-                "순매출금액":   to_int(row.iloc[10]),
-                "총이익액":     to_int(row.iloc[11]),
-                "판매수수료":   to_int(row.iloc[13]),
-                "정산예정금액": to_int(row.iloc[17]),
-            })
-    rows.sort(key=lambda x: x["일자"])
-    channel_day_data[channel] = rows
-    print(f"  ✅ {channel}: {len(rows)}행 파싱")
+        if i < 3:
+            continue
+        if is_total_row(row):
+            total = {k: to_int(row.iloc[c]) for k, c in PRODUCT_FIELDS}
+            continue
+        code = norm_code(row.iloc[1])
+        name = str(row.iloc[2]).strip() if pd.notna(row.iloc[2]) else ""
+        if not code and not name:
+            continue
+        model, how = map_model(code, name)
+        r = {"품번코드": code, "수집상품명": name, "모델명": model, "매핑": how}
+        r.update({k: to_int(row.iloc[c]) for k, c in PRODUCT_FIELDS})
+        rows.append(r)
+    # 검증: 원본 합계행 vs 파싱 합계
+    if total:
+        diffs = [(k, total[k], sum(r[k] for r in rows)) for k, _ in PRODUCT_FIELDS
+                 if total[k] != sum(r[k] for r in rows)]
+        if diffs:
+            raise ValueError(f"[검증 실패] {os.path.basename(fpath)} (항목, 원본, 파싱): {diffs}")
+    return rows, total
 
-# ── 쇼핑몰별 파싱 ──────────────────────────────────────────
-shop_data = []
-if shop_files:
-    fpath = sorted(shop_files, key=os.path.getmtime, reverse=True)[0]
+
+# ── 일별 파서 (로드맵 3-2 인덱스, 샘플 미제공으로 미검증) ─────────────────
+DAY_FIELDS = [("주문수량", 3), ("주문금액", 4), ("취소수량", 5), ("취소금액", 6), ("반품수량", 7),
+              ("반품금액", 8), ("순매출수량", 9), ("순매출금액", 10), ("총이익액", 11),
+              ("판매수수료", 13), ("정산예정금액", 17)]
+
+
+def parse_day_file(fpath):
     df = pd.read_excel(fpath, header=None)
+    out, total = [], None
     for i, row in df.iterrows():
-        if i < 3: continue
-        val = str(row.iloc[0]).strip()
-        if val in ["합 계","합계","NaN","nan",""]: continue
-        if pd.notna(row.iloc[1]) and str(row.iloc[1]).strip() != "":
-            shop_data.append({
-                "쇼핑몰명":     str(row.iloc[1]).strip(),
-                "주문수량":     to_int(row.iloc[2]),
-                "주문금액":     to_int(row.iloc[3]),
-                "취소수량":     to_int(row.iloc[4]),
-                "취소금액":     to_int(row.iloc[5]),
-                "반품수량":     to_int(row.iloc[6]),
-                "반품금액":     to_int(row.iloc[7]),
-                "순매출수량":   to_int(row.iloc[8]),
-                "순매출금액":   to_int(row.iloc[9]),
-                "총이익액":     to_int(row.iloc[10]),
-                "판매수수료":   to_int(row.iloc[12]),
-                "정산예정금액": to_int(row.iloc[16]),
-            })
+        if i < 3:
+            continue
+        if is_total_row(row):
+            total = {k: to_int(row.iloc[c]) for k, c in DAY_FIELDS}
+            continue
+        if pd.isna(row.iloc[1]):
+            continue
+        d = pd.to_datetime(row.iloc[1], errors="coerce")
+        if pd.isna(d):
+            continue
+        r = {"일자": d.strftime("%Y-%m-%d"), "요일": str(row.iloc[2]).strip()}
+        r.update({k: to_int(row.iloc[c]) for k, c in DAY_FIELDS})
+        out.append(r)
+    if total:
+        diffs = [(k, total[k], sum(r[k] for r in out)) for k, _ in DAY_FIELDS if total[k] != sum(r[k] for r in out)]
+        if diffs:
+            raise ValueError(f"[검증 실패] {os.path.basename(fpath)} (항목, 원본, 파싱): {diffs}")
+    return out
 
-# ── 데이터 기반 기준일 갱신 ────────────────────────────────
-report_date = extract_latest_date_from_data(channel_day_data)
-print(f"  집계 기준일 (데이터 기반): {report_date}")
 
-# ── KPI 집계 ───────────────────────────────────────────────
-src = shop_data if shop_data else [r for rows in channel_day_data.values() for r in rows]
-total_order_qty  = sum(r["주문수량"]     for r in src)
-total_order_amt  = sum(r["주문금액"]     for r in src)
-total_cancel_amt = sum(r["취소금액"]     for r in src)
-total_return_amt = sum(r["반품금액"]     for r in src)
-total_net_amt    = sum(r["순매출금액"]   for r in src)
-total_settle_amt = sum(r["정산예정금액"] for r in src)
-settle_ratio     = f"{total_settle_amt/total_net_amt*100:.1f}%" if total_net_amt else "-"
-
-# ── HTML 생성 헬퍼 ─────────────────────────────────────────
-def jd(obj): return json.dumps(obj, ensure_ascii=False)
-
-def make_day_table_html(rows, safe_ch):
-    """날짜 필터 포함 테이블 HTML"""
-    if not rows: return ""
-    min_date = rows[0]["일자"]
-    max_date = rows[-1]["일자"]
-    tbl = ""
+def merge_day_rows(rows):
+    """B방식 누적: 동일 채널 복수 파일 → 일자 기준 병합. 같은 일자가 중복되면 최신 파일 값으로 대체(이중 합산 방지)."""
+    by_date = OrderedDict()
     for r in rows:
-        net = r["순매출금액"]; settle = r["정산예정금액"]
-        ratio = f"{settle/net*100:.1f}%" if net else "-"
-        tbl += f"""<tr class="data-row" data-date="{r['일자']}">
-          <td>{r['일자']}</td><td class="center">{r['요일']}</td>
-          <td class="num">{fmt(r['주문수량'])}</td><td class="num">{fmt(r['주문금액'])}</td>
-          <td class="num red">{fmt(r['취소금액'])}</td><td class="num red">{fmt(r['반품금액'])}</td>
-          <td class="num bold">{fmt(r['순매출금액'])}</td><td class="num">{fmt(r['판매수수료'])}</td>
-          <td class="num purple">{fmt(r['정산예정금액'])}</td><td class="num">{ratio}</td>
-        </tr>"""
-    return f"""
-    <div class="date-filter">
-      <label>조회 기간</label>
-      <input type="date" id="from_{safe_ch}" value="{min_date}" min="{min_date}" max="{max_date}">
-      <span>~</span>
-      <input type="date" id="to_{safe_ch}"   value="{max_date}" min="{min_date}" max="{max_date}">
-      <button onclick="filterTable('{safe_ch}')">조회</button>
-      <button class="reset-btn" onclick="resetFilter('{safe_ch}','{min_date}','{max_date}')">초기화</button>
-      <span class="filter-result" id="result_{safe_ch}"></span>
-    </div>
-    <table id="tbl_{safe_ch}">
-      <thead><tr>
-        <th>일자</th><th class="center">요일</th><th class="num">주문수량</th><th class="num">주문금액</th>
-        <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-        <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-      </tr></thead>
-      <tbody>{tbl}
-        <tr class="total-row" id="total_{safe_ch}">
-          <td colspan="2">합 계</td>
-          <td class="num" id="tot_qty_{safe_ch}"></td><td class="num" id="tot_amt_{safe_ch}"></td>
-          <td class="num red" id="tot_can_{safe_ch}"></td><td class="num red" id="tot_ret_{safe_ch}"></td>
-          <td class="num bold" id="tot_net_{safe_ch}"></td><td class="num" id="tot_fee_{safe_ch}"></td>
-          <td class="num purple" id="tot_set_{safe_ch}"></td><td class="num" id="tot_rat_{safe_ch}"></td>
-        </tr>
-      </tbody>
-    </table>"""
-
-# ── 채널별 패널 + 차트 JS 생성 ────────────────────────────
-channel_order = list(channel_day_data.keys())
-all_tab_ids   = (["shop"] if shop_data else []) + [ch.replace(" ","_") for ch in channel_order]
-first_tab     = "shop" if shop_data else (channel_order[0].replace(" ","_") if channel_order else "")
-
-ch_panels_html = ""
-ch_chart_js    = ""
-
-for i, (ch, rows) in enumerate(channel_day_data.items()):
-    safe   = ch.replace(" ", "_")
-    active = "active" if (not shop_data and i == 0) else ""
-
-    # ── 채널별 추이 계산 ──────────────────────────────────
-    daily, weekly, monthly = compute_trends(rows)
-
-    # ── 정산예정금액 막대 (원본 날짜 기준) ───────────────
-    settle_lbl = jd([r["일자"]         for r in rows])
-    settle_dat = jd([r["정산예정금액"] for r in rows])
-
-    ch_chart_js += f"""
-  // ── {ch} ──
-  makeLine('cDaily_{safe}',   {jd(daily.get('labels',[]))},   {jd(daily.get('net',[]))},   '순매출금액');
-  makeLine('cWeekly_{safe}',  {jd(weekly.get('labels',[]))},  {jd(weekly.get('net',[]))},  '순매출금액');
-  makeBar2('cMonthly_{safe}', {jd(monthly.get('labels',[]))}, {jd(monthly.get('net',[]))}, '순매출금액');
-  makeBar2('cSettle_{safe}',  {settle_lbl}, {settle_dat}, '정산예정금액');
-  calcTotal('{safe}');
-"""
-
-    tbl_html = make_day_table_html(rows, safe)
-
-    ch_panels_html += f"""
-<div class="panel {active}" id="panel-{safe}">
-  <div class="trend-tabs">
-    <button class="trend-btn active" onclick="switchTrend('{safe}','daily')">일별 추이 (7일)</button>
-    <button class="trend-btn" onclick="switchTrend('{safe}','weekly')">주별 추이 (30일)</button>
-    <button class="trend-btn" onclick="switchTrend('{safe}','monthly')">월별 추이 (12개월)</button>
-  </div>
-  <div class="chart-grid">
-    <div id="trend-daily-{safe}">
-      <div class="card"><div class="card-title">{ch} · 일별 매출 추이 (최근 7일)</div><div class="chart-wrap"><canvas id="cDaily_{safe}"></canvas></div></div>
-    </div>
-    <div id="trend-weekly-{safe}" style="display:none">
-      <div class="card"><div class="card-title">{ch} · 주별 매출 추이 (최근 30일)</div><div class="chart-wrap"><canvas id="cWeekly_{safe}"></canvas></div></div>
-    </div>
-    <div id="trend-monthly-{safe}" style="display:none">
-      <div class="card"><div class="card-title">{ch} · 월별 매출 추이 (최근 12개월)</div><div class="chart-wrap"><canvas id="cMonthly_{safe}"></canvas></div></div>
-    </div>
-    <div class="card"><div class="card-title">{ch} · 정산예정금액</div><div class="chart-wrap"><canvas id="cSettle_{safe}"></canvas></div></div>
-  </div>
-  <div class="tbl-card">
-    <div class="card-title">{ch} · 일별 상세 내역</div>
-    {tbl_html}
-  </div>
-</div>"""
-
-# ── 쇼핑몰별 패널 ──────────────────────────────────────────
-shop_panel_html = ""
-shop_chart_js   = ""
-if shop_data:
-    s_lbl = jd([r["쇼핑몰명"]     for r in shop_data])
-    s_net = jd([r["순매출금액"]   for r in shop_data])
-    s_set = jd([r["정산예정금액"] for r in shop_data])
-    s_tbl = ""
-    for r in shop_data:
-        net = r["순매출금액"]; settle = r["정산예정금액"]
-        ratio = f"{settle/net*100:.1f}%" if net else "-"
-        s_tbl += f"""<tr>
-          <td>{r['쇼핑몰명']}</td>
-          <td class="num">{fmt(r['주문수량'])}</td><td class="num">{fmt(r['주문금액'])}</td>
-          <td class="num red">{fmt(r['취소금액'])}</td><td class="num red">{fmt(r['반품금액'])}</td>
-          <td class="num bold">{fmt(r['순매출금액'])}</td><td class="num">{fmt(r['판매수수료'])}</td>
-          <td class="num purple">{fmt(r['정산예정금액'])}</td><td class="num">{ratio}</td>
-        </tr>"""
-    sn = sum(r["순매출금액"] for r in shop_data)
-    ss = sum(r["정산예정금액"] for r in shop_data)
-    s_tbl += f"""<tr class="total-row">
-      <td>합 계</td>
-      <td class="num">{fmt(sum(r['주문수량'] for r in shop_data))}</td>
-      <td class="num">{fmt(sum(r['주문금액'] for r in shop_data))}</td>
-      <td class="num red">{fmt(sum(r['취소금액'] for r in shop_data))}</td>
-      <td class="num red">{fmt(sum(r['반품금액'] for r in shop_data))}</td>
-      <td class="num bold">{fmt(sn)}</td><td class="num">-</td>
-      <td class="num purple">{fmt(ss)}</td>
-      <td class="num">{f"{ss/sn*100:.1f}%" if sn else "-"}</td>
-    </tr>"""
-    shop_panel_html = f"""
-<div class="panel active" id="panel-shop">
-  <div class="chart-grid">
-    <div class="card"><div class="card-title">쇼핑몰별 순매출금액</div><div class="chart-wrap"><canvas id="cShopNet"></canvas></div></div>
-    <div class="card"><div class="card-title">쇼핑몰별 정산예정금액</div><div class="chart-wrap"><canvas id="cShopSettle"></canvas></div></div>
-  </div>
-  <div class="tbl-card"><div class="card-title">쇼핑몰별 상세 내역</div>
-    <table><thead><tr>
-      <th>쇼핑몰</th><th class="num">주문수량</th><th class="num">주문금액</th>
-      <th class="num">취소금액</th><th class="num">반품금액</th><th class="num">순매출금액</th>
-      <th class="num">판매수수료</th><th class="num">정산예정금액</th><th class="num">정산율</th>
-    </tr></thead><tbody>{s_tbl}</tbody></table>
-  </div>
-</div>"""
-    shop_chart_js = f"""
-  makeBar2('cShopNet',    {s_lbl}, {s_net}, '순매출금액');
-  makeBar2('cShopSettle', {s_lbl}, {s_set}, '정산예정금액');"""
-
-# 탭 버튼
-tab_btns = ""
-if shop_data:
-    tab_btns += '<button class="tab-btn active" onclick="switchTab(\'shop\')" id="btn-shop">쇼핑몰별</button>\n'
-for i, ch in enumerate(channel_order):
-    safe   = ch.replace(" ","_")
-    active = "active" if (not shop_data and i == 0) else ""
-    tab_btns += f'  <button class="tab-btn {active}" onclick="switchTab(\'{safe}\')" id="btn-{safe}">{ch}</button>\n'
-
-filenames_used = ", ".join(os.path.basename(f) for f in day_files[:3])
-if len(day_files) > 3: filenames_used += f" 외 {len(day_files)-3}개"
-
-# ── HTML ───────────────────────────────────────────────────
-html = f"""<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>매출 현황 대시보드 {report_date}</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
-*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0}}
-:root{{--bg:#F5F6FA;--surface:#fff;--border:#E4E6EF;--t1:#1A1D2E;--t2:#6B7280;
-  --blue:#3B82F6;--green:#10B981;--red:#EF4444;--purple:#8B5CF6;--r:12px}}
-body{{font-family:'Pretendard',-apple-system,sans-serif;background:var(--bg);color:var(--t1);padding:28px 24px 60px}}
-.header{{display:flex;align-items:baseline;gap:10px;margin-bottom:24px;flex-wrap:wrap}}
-.header h1{{font-size:21px;font-weight:700;letter-spacing:-.4px}}
-.badge{{font-size:12px;font-weight:500;color:var(--t2);background:var(--border);padding:3px 10px;border-radius:20px}}
-.fname{{font-size:11px;color:var(--t2);margin-left:auto}}
-.kpi-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:22px}}
-.kpi{{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}}
-.kpi .lbl{{font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:7px}}
-.kpi .val{{font-size:19px;font-weight:700;letter-spacing:-.5px;line-height:1}}
-.kpi .sub{{font-size:11px;color:var(--t2);margin-top:4px}}
-.kpi.k-blue{{border-top:3px solid var(--blue)}}.kpi.k-red{{border-top:3px solid var(--red)}}
-.kpi.k-green{{border-top:3px solid var(--green)}}.kpi.k-purple{{border-top:3px solid var(--purple)}}
-.tabs{{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}}
-.tab-btn{{padding:7px 16px;font-size:13px;font-weight:600;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--t2);cursor:pointer;transition:all .15s}}
-.tab-btn.active{{background:var(--t1);color:#fff;border-color:var(--t1)}}
-.trend-tabs{{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}}
-.trend-btn{{padding:5px 14px;font-size:12px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--t2);cursor:pointer;transition:all .15s}}
-.trend-btn.active{{background:var(--blue);color:#fff;border-color:var(--blue)}}
-.chart-grid{{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}}
-@media(max-width:800px){{.chart-grid{{grid-template-columns:1fr}}}}
-.card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px}}
-.card-title{{font-size:12px;font-weight:600;color:var(--t2);margin-bottom:14px}}
-.chart-wrap{{position:relative;height:240px}}
-.tbl-card{{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;overflow-x:auto;margin-bottom:14px}}
-/* 날짜 필터 */
-.date-filter{{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap}}
-.date-filter label{{font-size:12px;font-weight:600;color:var(--t2)}}
-.date-filter input[type=date]{{padding:5px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;font-family:inherit}}
-.date-filter button{{padding:5px 14px;font-size:12px;font-weight:600;background:var(--blue);color:#fff;border:none;border-radius:6px;cursor:pointer}}
-.date-filter .reset-btn{{background:var(--surface);color:var(--t2);border:1px solid var(--border)}}
-.filter-result{{font-size:11px;color:var(--t2);margin-left:4px}}
-table{{width:100%;border-collapse:collapse;font-size:12.5px}}
-thead th{{font-size:10px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;padding:0 8px 9px;border-bottom:2px solid var(--border);white-space:nowrap;text-align:left}}
-thead th.num{{text-align:right}}
-tbody tr{{border-bottom:1px solid var(--border);transition:background .12s}}
-tbody tr:last-child{{border-bottom:none}}
-tbody tr:hover{{background:#F8F9FF}}
-tbody td{{padding:10px 8px;vertical-align:middle}}
-td.num{{text-align:right;font-variant-numeric:tabular-nums}}
-td.center{{text-align:center}}td.red{{color:var(--red)}}
-td.purple{{color:var(--purple);font-weight:600}}td.bold{{font-weight:600}}
-tr.total-row{{font-weight:700;border-top:2px solid var(--border)!important}}
-tr.hidden{{display:none}}
-.footer{{margin-top:20px;text-align:center;font-size:11px;color:var(--t2)}}
-.panel{{display:none}}.panel.active{{display:block}}
-</style>
-</head>
-<body>
-<div class="header">
-  <h1>📊 매출 현황 대시보드</h1>
-  <span class="badge">{report_date}</span>
-  <span class="fname">{filenames_used}</span>
-</div>
-<div class="kpi-grid">
-  <div class="kpi k-blue"><div class="lbl">주문금액</div><div class="val">₩{fmt(total_order_amt)}</div><div class="sub">{fmt(total_order_qty)}건</div></div>
-  <div class="kpi k-red"><div class="lbl">취소·반품</div><div class="val">₩{fmt(total_cancel_amt+total_return_amt)}</div><div class="sub">취소 {fmt(total_cancel_amt)} / 반품 {fmt(total_return_amt)}</div></div>
-  <div class="kpi k-green"><div class="lbl">순매출금액</div><div class="val">₩{fmt(total_net_amt)}</div><div class="sub">&nbsp;</div></div>
-  <div class="kpi k-purple"><div class="lbl">정산예정금액</div><div class="val">₩{fmt(total_settle_amt)}</div><div class="sub">순매출 대비 {settle_ratio}</div></div>
-</div>
-<div class="tabs">{tab_btns}</div>
-{shop_panel_html}
-{ch_panels_html}
-<div class="footer">생성: {datetime.now().strftime("%Y-%m-%d %H:%M")} · {filenames_used}</div>
-
-<script>
-const COLORS=['#3B82F6','#10B981','#F59E0B','#EF4444','#8B5CF6','#06B6D4','#EC4899','#FEE500'];
-
-function makeLine(id, labels, data, label){{
-  const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{{type:'line',
-    data:{{labels,datasets:[{{label,data,borderColor:'#3B82F6',
-      backgroundColor:'rgba(59,130,246,0.08)',pointBackgroundColor:'#3B82F6',
-      pointRadius:4,pointHoverRadius:6,tension:0.3,fill:true,borderWidth:2}}]}},
-    options:{{responsive:true,maintainAspectRatio:false,
-      plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>'₩'+c.parsed.y.toLocaleString()}}}}}},
-      scales:{{
-        y:{{ticks:{{callback:v=>v>=1e8?(v/1e8).toFixed(1)+'억':v>=1e4?(v/1e4).toFixed(0)+'만':v,font:{{size:10}}}},grid:{{color:'#E4E6EF'}}}},
-        x:{{ticks:{{font:{{size:10}}}},grid:{{display:false}}}}
-      }}
-    }}
-  }});
-}}
-
-function makeBar2(id, labels, data, label){{
-  const el=document.getElementById(id); if(!el)return;
-  new Chart(el.getContext('2d'),{{type:'bar',
-    data:{{labels,datasets:[{{label,data,
-      backgroundColor:labels.map((_,i)=>COLORS[i%COLORS.length]+'BB'),
-      borderColor:labels.map((_,i)=>COLORS[i%COLORS.length]),
-      borderWidth:1.5,borderRadius:5}}]}},
-    options:{{responsive:true,maintainAspectRatio:false,
-      plugins:{{legend:{{display:false}},tooltip:{{callbacks:{{label:c=>'₩'+c.parsed.y.toLocaleString()}}}}}},
-      scales:{{
-        y:{{ticks:{{callback:v=>v>=1e8?(v/1e8).toFixed(1)+'억':v>=1e4?(v/1e4).toFixed(0)+'만':v,font:{{size:10}}}},grid:{{color:'#E4E6EF'}}}},
-        x:{{ticks:{{font:{{size:10}}}},grid:{{display:false}}}}
-      }}
-    }}
-  }});
-}}
-
-// 탭 전환
-const ALL_TABS = {jd(all_tab_ids)};
-function switchTab(tab){{
-  ALL_TABS.forEach(t=>{{
-    const p=document.getElementById('panel-'+t);
-    const b=document.getElementById('btn-'+t);
-    if(p) p.style.display=t===tab?'block':'none';
-    if(b) b.classList.toggle('active',t===tab);
-  }});
-}}
-
-// 추이 탭 전환
-function switchTrend(ch, type){{
-  ['daily','weekly','monthly'].forEach(t=>{{
-    const el=document.getElementById('trend-'+t+'-'+ch);
-    if(el) el.style.display=t===type?'':'none';
-  }});
-  const panel=document.getElementById('panel-'+ch);
-  if(panel) panel.querySelectorAll('.trend-btn').forEach((btn,i)=>{{
-    btn.classList.toggle('active',['daily','weekly','monthly'][i]===type);
-  }});
-}}
-
-// 합계 행 계산
-function calcTotal(ch){{
-  const rows=[...document.querySelectorAll('#tbl_'+ch+' .data-row:not(.hidden)')];
-  const cols=['qty','amt','can','ret','net','fee','set'];
-  const idx =[2,3,4,5,6,7,8];
-  const sums=cols.map(()=>0);
-  rows.forEach(tr=>{{
-    cols.forEach((_,i)=>{{
-      const txt=tr.cells[idx[i]].textContent.replace(/[,₩]/g,'').trim();
-      sums[i]+=parseInt(txt)||0;
-    }});
-  }});
-  cols.forEach((c,i)=>{{
-    const el=document.getElementById('tot_'+c+'_'+ch);
-    if(el) el.textContent=sums[i].toLocaleString();
-  }});
-  const ratEl=document.getElementById('tot_rat_'+ch);
-  if(ratEl) ratEl.textContent=sums[4]>0?(sums[6]/sums[4]*100).toFixed(1)+'%':'-';
-  const resEl=document.getElementById('result_'+ch);
-  if(resEl) resEl.textContent=rows.length+'일 조회 중';
-}}
-
-// 날짜 필터
-function filterTable(ch){{
-  const from=document.getElementById('from_'+ch).value;
-  const to  =document.getElementById('to_'+ch).value;
-  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>{{
-    const d=tr.dataset.date;
-    tr.classList.toggle('hidden', d<from||d>to);
-  }});
-  calcTotal(ch);
-}}
-
-function resetFilter(ch, minD, maxD){{
-  document.getElementById('from_'+ch).value=minD;
-  document.getElementById('to_'+ch).value=maxD;
-  document.querySelectorAll('#tbl_'+ch+' .data-row').forEach(tr=>tr.classList.remove('hidden'));
-  calcTotal(ch);
-}}
-
-window.addEventListener('DOMContentLoaded', function(){{
-{shop_chart_js}
-{ch_chart_js}
-}});
-</script>
-</body>
-</html>
-"""
-
-with open(OUTPUT_FILE, "w", encoding="utf-8-sig") as f:
-    f.write(html)
-
-history = {}
-if os.path.exists(HISTORY_FILE):
-    with open(HISTORY_FILE, "r", encoding="utf-8-sig") as f:
-        history = json.load(f)
-history[report_date] = {ch: rows for ch, rows in channel_day_data.items()}
-with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-    json.dump(history, f, ensure_ascii=False, indent=2)
-
-print(f"\n✅ 대시보드 생성 완료!")
-print(f"   처리 채널: {', '.join(channel_order)}")
-print(f"   저장 위치: {OUTPUT_FILE}")
+        by_date[r["일자"]] = r
+    return [by_date[k] for k in sorted(by_date)]
 
 
-# BAT_RUN 환경변수가 없을 때만 Enter 대기 (배치 파일 자동 종료)
-import os as _os
-if not _os.environ.get("BAT_RUN"):
-    input("Enter를 눌러 닫기...")
+# ── 렌더링 확인용 가상 일자별 데이터 ─────────────────────────────────
+def demo_daily(base, days=400, seed=7):
+    rnd = random.Random(seed)
+    scale = {"카카오톡스토어": 9_000_000, "카카오선물하기": 2_500_000, "롯데": 3_000_000, "CJ": 4_000_000,
+             "오늘의집": 5_000_000, "SK": 1_500_000, "W컨셉": 900_000, "CJ온스타일": 3_500_000}
+    fee = {"카카오톡스토어": .12, "카카오선물하기": .15, "롯데": .25, "CJ": .27, "오늘의집": .18,
+           "SK": .20, "W컨셉": .30, "CJ온스타일": .28}
+    wd = "월화수목금토일"
+    out = {}
+    for ch in CHANNELS:
+        rows = []
+        for k in range(days):
+            d = base - timedelta(days=days - 1 - k)
+            amt = int(scale[ch] * rnd.uniform(.4, 1.6) * (1.25 if d.weekday() >= 5 else 1) / 100) * 100
+            qty = max(1, amt // 180_000)
+            cancel = int(amt * rnd.choice([0, 0, 0, .03, .06]) / 100) * 100
+            ret = int(amt * rnd.choice([0, 0, 0, 0, .02]) / 100) * 100
+            net = amt - cancel - ret
+            f = int(net * fee[ch])
+            rows.append({"일자": d.strftime("%Y-%m-%d"), "요일": wd[d.weekday()], "주문수량": qty,
+                         "주문금액": amt, "취소수량": 1 if cancel else 0, "취소금액": cancel,
+                         "반품수량": 1 if ret else 0, "반품금액": ret, "순매출수량": qty,
+                         "순매출금액": net, "총이익액": 0, "판매수수료": f, "정산예정금액": net - f})
+        out[ch] = rows
+    return out
+
+
+TOTAL = "전체"
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    # 기본 경로는 기존 v5 저장소 구조(run.py 위치 기준 input\ → output\index.html)를 따름
+    BASE = os.path.dirname(os.path.abspath(__file__))
+    ap.add_argument("--input", default=os.path.join(BASE, "input"), help="사방넷 다운로드 파일 폴더")
+    ap.add_argument("--template", default=os.path.join(BASE, "template_v2.html"))
+    ap.add_argument("--out", default=os.path.join(BASE, "output", "index.html"))
+    ap.add_argument("--demo", action="store_true", help="일별 파일이 없을 때 가상 데이터로 채움")
+    a = ap.parse_args()
+
+    files = sorted(glob.glob(os.path.join(a.input, "*.xlsx")))
+    day_files = [f for f in files if "일별" in os.path.basename(f)]
+    prod_files = [f for f in files if "상품별" in os.path.basename(f)]
+    warnings, log = {}, []
+    warn = lambda ch, msg: warnings.setdefault(ch, []).append(msg)
+
+    daily, fingerprints = {}, {}
+    for f in day_files:
+        ch = extract_channel(f)
+        rows = parse_day_file(f)
+        daily.setdefault(ch, []).extend(rows)
+        fp = json.dumps([[r[k] for k in ("일자", "주문금액", "정산예정금액")] for r in rows])
+        fingerprints.setdefault(fp, []).append(ch)
+        log.append({"file": os.path.basename(f), "channel": ch, "days": len(rows), "합계검증": "일치"})
+    daily = {ch: merge_day_rows(r) for ch, r in daily.items()}
+
+    # 데이터 점검: 서로 다른 채널 파일의 내용이 완전히 같으면 경고(다운로드 시 채널 선택 오류 의심)
+    for chs in fingerprints.values():
+        if len(chs) > 1:
+            for ch in chs:
+                warn(ch, f"{' · '.join(c for c in chs if c != ch)} 파일과 일자별 수치가 완전히 동일함 (다운로드 채널 확인 필요)")
+    # 데이터 점검: 정산예정금액이 전 기간 0이면 경고(수수료율 미설정 의심)
+    for ch, rows in daily.items():
+        amt = sum(r["주문금액"] for r in rows); st = sum(r["정산예정금액"] for r in rows)
+        if amt and st == 0:
+            warn(ch, "정산예정금액이 전 기간 0원 (판매수수료 = 주문금액 100%) · 사방넷 수수료 설정 확인 필요")
+
+    products = {}
+    for f in prod_files:
+        rows, total = parse_product_file(f)
+        ch = extract_channel(f)
+        ch = TOTAL if ch == UNASSIGNED else ch          # 채널 미표기 상품별 파일 = 전 채널 합산으로 간주
+        ps, pe = extract_file_period(f)
+        products.setdefault(ch, []).append({"date": ps, "s": ps, "e": pe, "file": os.path.basename(f), "rows": rows})
+        log.append({"file": os.path.basename(f), "channel": ch, "period": f"{ps}~{pe}", "rows": len(rows),
+                    "합계검증": "일치" if total else "합계행 없음",
+                    "키워드매핑": [r["수집상품명"] for r in rows if r["매핑"] == "keyword"],
+                    "미매핑": [f'{r["품번코드"]} {r["수집상품명"]}' for r in rows if r["매핑"] == "raw"]})
+
+    all_dates = [r["일자"] for rows in daily.values() for r in rows]
+    base = max(all_dates) if all_dates else datetime.today().strftime("%Y-%m-%d")
+    demo = False
+    if a.demo and not all_dates:
+        base = (date.today() - timedelta(days=1)).strftime("%Y-%m-%d")
+        daily = demo_daily(datetime.strptime(base, "%Y-%m-%d").date())
+        demo = True
+
+    # 전체 = 채널 합산 (KPI는 개별 채널만 합산하므로 이중 계산 없음)
+    agg = OrderedDict()
+    for ch, rows in daily.items():
+        for r in rows:
+            t = agg.setdefault(r["일자"], {"일자": r["일자"], "요일": r["요일"]})
+            for k, _ in DAY_FIELDS:
+                t[k] = t.get(k, 0) + r[k]
+    total_daily = [agg[k] for k in sorted(agg)]
+
+    # 채널 정렬: 주문금액 큰 순 (데이터 기반). 일별 데이터 없는 상품 전용 채널은 뒤에.
+    order = sorted(daily, key=lambda c: -sum(r["주문금액"] for r in daily[c]))
+    order += [c for c in products if c not in order and c != TOTAL]
+    channels = [TOTAL] + order
+    daily_out = {TOTAL: total_daily, **daily}
+
+    # 화면 표시 항목만 출력 (취소·반품은 원본에서 제외된 데이터, 순매출=주문금액이므로 미출력. 검증은 전 항목으로 수행 완료)
+    KEEP = ("주문수량", "주문금액", "판매수수료", "정산예정금액")
+    daily_out = {ch: [{"일자": r["일자"], "요일": r["요일"], **{k: r[k] for k in KEEP}} for r in rows]
+                 for ch, rows in daily_out.items()}
+    for snaps in products.values():
+        for sn in snaps:
+            sn["rows"] = [{**{k: r[k] for k in ("품번코드", "수집상품명", "모델명", "매핑")}, **{k: r[k] for k in KEEP}}
+                          for r in sn["rows"]]
+
+    data = {
+        "meta": {"baseDate": base, "generatedAt": datetime.now().strftime("%Y-%m-%d %H:%M"),
+                 "files": [os.path.basename(f) for f in files], "demo": demo, "version": "v2",
+                 "total": TOTAL, "warnings": warnings},
+        "channels": channels, "daily": daily_out, "products": products,
+    }
+    with open(a.template, encoding="utf-8") as fp:
+        html = fp.read()
+    html = html.replace("/*__DATA__*/null", json.dumps(data, ensure_ascii=False))
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    with open(a.out, "w", encoding="utf-8-sig") as fp:
+        fp.write(html)
+    print(json.dumps(log, ensure_ascii=False, indent=1))
+    print(json.dumps(warnings, ensure_ascii=False, indent=1))
+    print(f"[완료] {a.out}  기준일={base}  demo={demo}  채널={channels}")
+
+
+if __name__ == "__main__":
+    main()
