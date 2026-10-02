@@ -93,6 +93,9 @@ tr.total td{font-weight:700;background:var(--surface-2);position:sticky;bottom:0
 tr.child td{color:var(--text-2);font-size:13px;background:var(--bg)}
 tr.child td:first-child{padding-left:34px;white-space:normal;max-width:420px}
 tr[data-i]{cursor:pointer}
+th.sortable{cursor:pointer;user-select:none}
+th.sortable:hover{color:var(--text)}
+th .arr{font-size:10px}
 #prodTable tr[data-i] td:first-child{max-width:320px;overflow:hidden;text-overflow:ellipsis}
 .tog{color:var(--text-3);display:inline-block;width:16px}
 .up{color:var(--up)} .down{color:var(--down)}
@@ -185,7 +188,7 @@ footer{margin-top:28px;color:var(--text-3);font-size:12px;text-align:center}
       <div class="card"><h3>모델별 주문금액 <span class="hint">상위 10</span></h3><div class="chart-box tall"><canvas id="cPNet"></canvas></div></div>
       <div class="card"><h3>모델별 정산예정금액 <span class="hint">상위 10</span></h3><div class="chart-box tall"><canvas id="cPSettle"></canvas></div></div>
     </div>
-    <div class="card tbl-card" id="prodTableCard"><h3>모델별 상세 <span class="hint">행 클릭 시 품번 단위 전개</span></h3><div class="tbl-scroll"><table id="prodTable"></table></div></div>
+    <div class="card tbl-card" id="prodTableCard"><h3>모델별 상세 <span class="hint">열 제목 클릭 시 정렬 · 행 클릭 시 품번 단위 전개</span></h3><div class="tbl-scroll"><table id="prodTable"></table></div></div>
     <div class="card empty-state hidden" id="prodEmpty"></div>
   </section>
 
@@ -446,7 +449,18 @@ function renderProduct() {
 
   const T = list.reduce((a, m) => acc(a, m.t), zero());
   const tagOf = s => s.has('raw') ? '<span class="tag warn">미매핑</span>' : s.has('keyword') ? '<span class="tag">키워드 매핑</span>' : '';
-  let h = '<thead><tr><th class="l">모델명</th><th class="l">품번코드</th><th>주문수량</th><th>주문금액</th><th>정산예정금액</th><th>정산율</th><th>주문금액 비중</th></tr></thead><tbody>';
+  // 정렬: 헤더 클릭 시 해당 열 기준 (같은 열 재클릭 시 오름/내림 전환). '기타'는 항상 맨 아래.
+  const PS = S.psort || (S.psort = { k: '주문금액', d: -1 });
+  const val = (o, k) => k === '모델명' ? (o.모델명 || '') : k === '수집상품명' ? (o.수집상품명 || '') : k === '품번코드' ? (o.품번코드 || [...new Set((o.kids || []).map(x => x.품번코드))].sort()[0] || '')
+    : k === '정산율' ? (o.t['주문금액'] ? o.t['정산예정금액'] / o.t['주문금액'] : 0) : o.t[k];
+  const cmp = (a, b, k) => { const x = val(a, k), y = val(b, k); return (typeof x === 'string' ? x.localeCompare(y, 'ko') : x - y) * PS.d; };
+  list.sort((a, b) => (a.모델명 === '기타') - (b.모델명 === '기타') || cmp(a, b, PS.k));
+  list.forEach(m => m.kids.sort((a, b) => cmp(a, b, PS.k === '모델명' ? '수집상품명' : PS.k)));
+  const COLS = [['모델명', '모델명', 'l'], ['품번코드', '품번코드', 'l'], ['주문수량', '주문수량'], ['주문금액', '주문금액'], ['정산예정금액', '정산예정금액'], ['정산율', '정산율'], ['주문금액', '주문금액 비중']];
+  let h = '<thead><tr>' + COLS.map(([k, label, cls], ci) => {
+    const on = PS.k === k && (ci !== 6 || PS.via === 6) && (ci !== 3 || PS.via !== 6);
+    return `<th class="sortable ${cls || ''}" data-k="${k}" data-ci="${ci}">${label}<span class="arr">${on ? (PS.d < 0 ? ' ▼' : ' ▲') : ''}</span></th>`;
+  }).join('') + '</tr></thead><tbody>';
   list.forEach((m, i) => {
     const codes = [...new Set(m.kids.map(k => k.품번코드 || '-'))].join(', ');
     const x = m.t;
@@ -456,6 +470,12 @@ function renderProduct() {
   });
   h += `<tr class="total"><td class="l">합계 (${list.length}개 모델)</td><td class="l"></td><td>${num(T['주문수량'])}</td><td>${num(T['주문금액'])}</td><td>${num(T['정산예정금액'])}</td><td>${pct(T['정산예정금액'], T['주문금액'])}</td><td>100.0%</td></tr>`;
   $('prodTable').innerHTML = h;
+  $('prodTable').querySelectorAll('th.sortable').forEach(th => th.onclick = () => {
+    const k = th.dataset.k, ci = +th.dataset.ci;
+    const isStr = k === '모델명' || k === '품번코드';
+    S.psort = PS.k === k ? { k, d: -PS.d, via: ci } : { k, d: isStr ? 1 : -1, via: ci };
+    renderProduct();
+  });
   $('prodTable').querySelectorAll('tr[data-i]').forEach(tr => tr.onclick = () => {
     const kids = $('prodTable').querySelectorAll(`tr[data-p="${tr.dataset.i}"]`);
     const open = kids[0] && kids[0].classList.contains('hidden');
